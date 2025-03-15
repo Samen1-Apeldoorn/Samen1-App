@@ -12,6 +12,7 @@ dependencies:
   cupertino_icons: ^1.0.2
   flutter_inappwebview: ^6.0.0
   wakelock_plus: ^1.1.4
+  package_info_plus: ^5.0.1
   workmanager:
     git:
       url: https://github.com/fluttercommunity/flutter_workmanager.git
@@ -20,7 +21,7 @@ dependencies:
   flutter_local_notifications: ^18.0.1
   shared_preferences: ^2.2.2
   http: ^1.1.2
-  url_launcher: ^6.2.2
+  url_launcher: ^6.1.14
   video_player: ^2.7.2
   path_provider: ^2.1.1
 
