@@ -99,7 +99,7 @@ class RSSService {
         debugPrint('Title: $title');
         debugPrint('Link: $link');
         debugPrint('Date: $pubDate');
-        debugPrint('Description: ${description ?? "No description"}');
+        debugPrint('Description: $description');
 
         return RSSItem(
           title: title,
