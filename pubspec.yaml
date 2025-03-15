@@ -1,5 +1,5 @@
-name: samen1appv5
-description: "Samen1 mobile application"
+name: Samen1
+description: "Samen1 Android APP"
 publish_to: 'none'
 version: 1.0.0+1
 
@@ -23,6 +23,7 @@ dependencies:
   url_launcher: ^6.2.2
   video_player: ^2.7.2
   path_provider: ^2.1.1
+  flutter_launcher_icons: ^0.10.0
 
 dev_dependencies:
   flutter_test:
@@ -31,7 +32,10 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
-  # Uncomment when adding images
-  # assets:
-  #   - assets/images/
+  assets:
+    - assets/images/logo.png
 
+flutter_icons:
+  android: true
+  ios: false
+  image_path: "assets/images/logo.png"
