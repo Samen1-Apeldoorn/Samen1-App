@@ -40,18 +40,26 @@ class _NewsPageState extends State<NewsPage> {
                 onLoadStart: (controller, url) {
                   setState(() {
                     _isLoading = true;  // Start loading indicator
+                    _isWebViewVisible = false;  // Webview blijft verborgen tijdens het laden
                   });
                 },
                 onLoadStop: (controller, url) async {
-                  await controller.evaluateJavascript(source: '''
-                    document.querySelector('.play-button')?.click();
-                  ''');
-
-                  await controller.injectCSSCode(source: '''
-                    footer, .site-header, .site-footer, #mobilebar, .page-title { display: none !important; }
-                    body { padding-top: 0 !important; }
-                    #top { padding-top: 1rem; }
-                  ''');
+                  // Controleer de URL en pas de CSS aan op basis van de pagina
+                  if (url.toString() == 'https://samen1.nl/nieuws/') {
+                    // CSS voor de homepage
+                    await controller.injectCSSCode(source: '''
+                      footer, .site-header, .site-footer, #mobilebar, .page-title { display: none !important; }
+                      body { padding-top: 0 !important; }
+                      #top { padding-top: 1rem; }
+                    ''');
+                  } else {
+                    // CSS voor andere pagina's
+                    await controller.injectCSSCode(source: '''
+                      footer, .site-header, .site-footer, #mobilebar { display: none !important; }
+                      body { padding-top: 0 !important; }
+                      #top { padding-top: 1rem; }
+                    ''');
+                  }
 
                   setState(() {
                     _isLoading = false;  // Stop loading
@@ -68,7 +76,8 @@ class _NewsPageState extends State<NewsPage> {
                 },
               ),
             ),
-            if (_isLoading)  // Laadindicator zichtbaar zolang _isLoading true is
+            // Laadindicator zichtbaar zolang _isLoading true is
+            if (_isLoading)
               const Center(
                 child: CircularProgressIndicator(),
               ),
