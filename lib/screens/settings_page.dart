@@ -190,7 +190,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 const SizedBox(height: 32),
                 Center(
                   child: Text(
-                    'Copyright Samen1 2025 - Versie 0.04',
+                    'Copyright Samen1 2025 - Versie V0.04.2-beta',
                     style: TextStyle(
                       color: Colors.grey[600],
                       fontSize: 12,
