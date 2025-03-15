@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:workmanager/workmanager.dart';
-import 'screens/news_page.dart';
+import 'screens/news_page.dart'; 
 import 'screens/radio_page.dart';
 import 'screens/tv_page.dart';
 import 'screens/settings_page.dart';
 import 'services/notification_service.dart';
 import 'services/rss_service.dart';
+
+// Global navigation key to use for navigation from outside of widgets
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,6 +25,18 @@ void main() async {
   );
   
   runApp(const MyApp());
+}
+
+// Handle deep links from notifications
+void handleDeepLink(String? url) {
+  if (url != null && url.isNotEmpty) {
+    debugPrint('Opening deep link: $url');
+    navigatorKey.currentState?.push(
+      MaterialPageRoute(
+        builder: (context) => NewsArticleScreen(articleUrl: url),
+      ),
+    );
+  }
 }
 
 @pragma('vm:entry-point')
@@ -40,6 +55,7 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey, // Set the navigator key
       title: 'Samen1',
       theme: ThemeData(
         colorScheme: ColorScheme.fromSeed(
