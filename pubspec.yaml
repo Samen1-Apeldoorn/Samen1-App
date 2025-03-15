@@ -22,10 +22,11 @@ dependencies:
   http: ^1.1.2
   url_launcher: ^6.2.2
   video_player: ^2.7.2
+  path_provider: ^2.1.1
 
 dev_dependencies:
   flutter_test:
-    sdk: flutter
+    sdk: flutters
   flutter_lints: ^2.0.0
 
 flutter:

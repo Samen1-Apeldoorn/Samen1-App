@@ -83,36 +83,36 @@ class _SettingsPageState extends State<SettingsPage> {
                     children: [
                       const Text('Controle interval'),
                       const SizedBox(height: 8),
-                      SegmentedButton<String>(
-                        segments: const [
-                          ButtonSegment(value: '10', label: Text('10 min')),
-                          ButtonSegment(value: '30', label: Text('30 min')),
-                          ButtonSegment(value: '60', label: Text('1 uur')),
-                          ButtonSegment(value: '240', label: Text('4 uur')),
-                        ],
-                        selected: {_checkInterval},
-                        onSelectionChanged: _notificationsEnabled
-                            ? (Set<String> newSelection) {
-                                setState(() => _checkInterval = newSelection.first);
-                                _saveSettings();
-                              }
-                            : null,
-                        style: ButtonStyle(
-                          visualDensity: VisualDensity.compact,
+                      SizedBox(
+                        width: double.infinity,
+                        child: SegmentedButton<String>(
+                          segments: const [
+                            ButtonSegment(value: '10', label: Text('10m')),
+                            ButtonSegment(value: '30', label: Text('30m')),
+                            ButtonSegment(value: '60', label: Text('1u')),
+                            ButtonSegment(value: '240', label: Text('4u')),
+                          ],
+                          selected: {_checkInterval},
+                          onSelectionChanged: _notificationsEnabled
+                              ? (Set<String> newSelection) {
+                                  setState(() => _checkInterval = newSelection.first);
+                                  _saveSettings();
+                                }
+                              : null,
+                          style: ButtonStyle(
+                            visualDensity: VisualDensity.compact,
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-                const Divider(height: 32),
                 ListTile(
-                  dense: true,
-                  title: const Text(
-                    'Test melding',
-                    style: TextStyle(fontSize: 14),
-                  ),
+                  title: const Text('Test melding'),
+                  subtitle: const Text('Stuur een test melding om te controleren'),
                   trailing: IconButton(
-                    icon: const Icon(Icons.notifications_active, size: 20),
+                    icon: const Icon(Icons.notifications_active),
                     onPressed: () async {
                       await NotificationService.initialize();
                       final result = await RSSService.sendTestNotification();

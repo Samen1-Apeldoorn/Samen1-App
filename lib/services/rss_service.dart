@@ -20,8 +20,9 @@ class RSSService {
       if (firstItem.pubDate != lastCheck) {
         await NotificationService.showNotification(
           title: firstItem.title,
-          body: firstItem.description,
+          body: '',  // Empty body
           payload: firstItem.link,
+          imageUrl: firstItem.imageUrl,
         );
         await prefs.setString(_lastCheckKey, firstItem.pubDate);
         return 'Nieuwe melding verzonden: ${firstItem.title}';
@@ -45,6 +46,7 @@ class RSSService {
         title: 'Samen1 Nieuws',  // Duidelijke titel voor de notificatie
         body: firstItem.title,   // Artikel titel als inhoud
         payload: firstItem.link,
+        imageUrl: firstItem.imageUrl,
       );
       return 'Test melding verzonden voor: ${firstItem.title}';
     } catch (e) {
@@ -62,23 +64,34 @@ class RSSService {
   static RSSItem? _parseFirstItem(String xmlString) {
     debugPrint('Parsing RSS feed...');
 
-    // Match everything between first <item> and </item>
     final itemRegex = RegExp(r'<item>(.*?)</item>', dotAll: true);
     final itemMatch = itemRegex.firstMatch(xmlString);
 
     if (itemMatch != null) {
       final itemContent = itemMatch.group(1) ?? '';
-      debugPrint('Found item content: $itemContent');
-
-      // Updated regex patterns to better match the actual feed structure
+      
       final titleRegex = RegExp(r'<title>\s*(.*?)\s*</title>', dotAll: true);
       final linkRegex = RegExp(r'<link>\s*(.*?)\s*</link>', dotAll: true);
       final dateRegex = RegExp(r'<pubDate>\s*(.*?)\s*</pubDate>', dotAll: true);
-      final descRegex = RegExp(r'<description><!\[CDATA\[(.*?)\]\]></description>', dotAll: true);
+      // Update image regex to match both media:content and enclosure
+      final imageRegex = RegExp(r'<(media:content|enclosure)[^>]*(?:url|src)="([^"]*)"', dotAll: true);
 
       final title = titleRegex.firstMatch(itemContent)?.group(1)?.trim();
       final link = linkRegex.firstMatch(itemContent)?.group(1)?.trim();
       final pubDate = dateRegex.firstMatch(itemContent)?.group(1)?.trim();
+      // Update image URL extraction
+      final imageMatch = imageRegex.firstMatch(itemContent);
+      var imageUrl = imageMatch?.group(2)?.trim();
+      
+      // Transform thumbnail URL to full image URL
+      if (imageUrl != null && imageUrl.contains('-150x150')) {
+        imageUrl = imageUrl.replaceAll('-150x150', '');
+        debugPrint('Transformed image URL: $imageUrl');
+      }
+
+      debugPrint('Found image URL: $imageUrl'); // Debug logging
+
+      final descRegex = RegExp(r'<description><!\[CDATA\[(.*?)\]\]></description>', dotAll: true);
       final description = descRegex.firstMatch(itemContent)?.group(1)?.trim();
 
       if (title != null && link != null && pubDate != null) {
@@ -92,7 +105,8 @@ class RSSService {
           title: title,
           link: link,
           pubDate: pubDate,
-          description: description ?? title,
+          description: '',
+          imageUrl: imageUrl,
         );
       }
     }
@@ -106,11 +120,13 @@ class RSSItem {
   final String link;
   final String pubDate;
   final String description;
+  final String? imageUrl;
 
   RSSItem({
     required this.title, 
     required this.link, 
     required this.pubDate, 
     required this.description,
+    this.imageUrl,
   });
 }
