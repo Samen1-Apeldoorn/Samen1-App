@@ -1,4 +1,4 @@
-# samen1appv5
+# Samen1 App
 
 Een nieuw Flutter-project.
 
