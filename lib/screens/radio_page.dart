@@ -55,32 +55,12 @@ class _RadioPageState extends State<RadioPage> {
                   // Eerst de JavaScript-code uitvoeren voordat we de webview zichtbaar maken
                   await controller.evaluateJavascript(source: '''
                     document.querySelector('.play-button')?.click();
+                  ''');
 
-                    var navbar = document.getElementById('mobilebar');
-                    if(navbar){
-                      navbar.remove();
-                    }
-
-                    var header = document.getElementsByClassName('page-title')[0];
-                    if(header){
-                      header.remove();
-                    }
-
-                    var headerContainer = document.getElementById('top');
-                    if(headerContainer){
-                      headerContainer.style.paddingTop = 0;
-                    }
-
-                    var headergay = document.getElementById('anchornav')
-                    if(headergay){
-                      headergay.style.top = 0;
-                    }
-
-                    var logo = document.getElementById('top');
-                    if (logo) {
-                      logo.style.paddingTop = '3rem'; // Add quotes to make it a string with a unit
-                    }
-
+                  await controller.injectCSSCode(source: '''
+                    footer, .site-header, .site-footer, #mobilebar, .page-title { display: none !important; }
+                    body { padding-top: 0 !important; }
+                    #top { padding-top: 1rem; }
                   ''');
 
                   // Stop de laadindicator als de pagina geladen is
