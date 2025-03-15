@@ -19,8 +19,8 @@ class RSSService {
       
       if (firstItem.pubDate != lastCheck) {
         await NotificationService.showNotification(
-          title: firstItem.title,
-          body: '',  // Empty body
+          title: 'Samen1 Nieuwsbericht', // Standard title for all notifications
+          body: firstItem.title,  // Article title as body
           payload: firstItem.link,
           imageUrl: firstItem.imageUrl,
         );
@@ -43,8 +43,8 @@ class RSSService {
 
       debugPrint('Sending notification for: ${firstItem.title}');
       await NotificationService.showNotification(
-        title: 'Samen1 Nieuws',  // Duidelijke titel voor de notificatie
-        body: firstItem.title,   // Artikel titel als inhoud
+        title: 'Samen1 Nieuws', // Standard title for all notifications
+        body: firstItem.title, // Article title as body
         payload: firstItem.link,
         imageUrl: firstItem.imageUrl,
       );
@@ -92,7 +92,7 @@ class RSSService {
       debugPrint('Found image URL: $imageUrl'); // Debug logging
 
       final descRegex = RegExp(r'<description><!\[CDATA\[(.*?)\]\]></description>', dotAll: true);
-      final description = descRegex.firstMatch(itemContent)?.group(1)?.trim();
+      final description = descRegex.firstMatch(itemContent)?.group(1)?.trim() ?? '';
 
       if (title != null && link != null && pubDate != null) {
         debugPrint('Successfully parsed RSS item:');
@@ -105,7 +105,7 @@ class RSSService {
           title: title,
           link: link,
           pubDate: pubDate,
-          description: '',
+          description: description,  // Use the extracted description
           imageUrl: imageUrl,
         );
       }

@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import '../main.dart'; // Import to access navigatorKey and handleDeepLink
 
 class NotificationService {
   static final _notifications = FlutterLocalNotificationsPlugin();
@@ -19,6 +20,7 @@ class NotificationService {
     await _notifications.initialize(settings,
         onDidReceiveNotificationResponse: (details) async {
       debugPrint('Notification clicked: ${details.payload}');
+      handleDeepLink(details.payload); // Use the handleDeepLink method from main.dart
     });
 
     // Request permissions for Android
@@ -50,7 +52,7 @@ class NotificationService {
 
         androidDetails = AndroidNotificationDetails(
           'samen1_news',
-          'Samen1 Nieuws',
+          ' ', 
           channelDescription: 'Nieuws updates van Samen1',
           importance: Importance.high,
           priority: Priority.high,
@@ -58,29 +60,37 @@ class NotificationService {
           styleInformation: BigPictureStyleInformation(
             FilePathAndroidBitmap(tempPath),
             hideExpandedLargeIcon: false,
-            contentTitle: title,
+            contentTitle: title, // Use the article title here
             summaryText: body,
           ),
         );
       } catch (e) {
         debugPrint('Error processing image: $e');
-        androidDetails = const AndroidNotificationDetails(
+        androidDetails = AndroidNotificationDetails(
           'samen1_news',
-          'Samen1 Nieuws',
+          ' ', // Empty or minimal channel name
           channelDescription: 'Nieuws updates van Samen1',
           importance: Importance.high,
           priority: Priority.high,
-          color: Color(0xFFFA6401),
+          color: const Color(0xFFFA6401),
+          styleInformation: BigTextStyleInformation(
+            body, // Use the article body here
+            contentTitle: title, // Use the article title here
+          ),
         );
       }
     } else {
-      androidDetails = const AndroidNotificationDetails(
+      androidDetails = AndroidNotificationDetails(
         'samen1_news',
-        'Samen1 Nieuws',
+        ' ', // Empty or minimal channel name
         channelDescription: 'Nieuws updates van Samen1',
         importance: Importance.high,
         priority: Priority.high,
-        color: Color(0xFFFA6401),
+        color: const Color(0xFFFA6401),
+        styleInformation: BigTextStyleInformation(
+          body, // Use the article body here
+          contentTitle: title, // Use the article title here
+        ),
       );
     }
 
