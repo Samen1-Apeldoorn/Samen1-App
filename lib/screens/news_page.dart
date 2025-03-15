@@ -39,26 +39,21 @@ class _NewsArticleScreenState extends State<NewsArticleScreen> {
               setState(() => _isLoading = true);
             },
             onLoadStop: (controller, url) async {
-              await controller.evaluateJavascript(source: '''
-                var navbar = document.getElementById('mobilebar');
-                if(navbar) navbar.remove();
-
-                var header = document.getElementsByClassName('page-title')[0];
-                if(header) header.remove();
-
-                var headerContainer = document.getElementById('top');
-                if(headerContainer) headerContainer.style.paddingTop = 0;
-                
-                var logo = document.getElementById('top');
-                if (logo) {
-                  logo.style.paddingTop = '3rem';
-                }
-              ''');
-
-              await controller.injectCSSCode(source: '''
-                footer, .site-header, .site-footer { display: none !important; }
-                body { padding-top: 0 !important; }
-              ''');
+              if (url.toString() == 'https://samen1.nl/nieuws/') {
+                // CSS voor de homepage
+                await controller.injectCSSCode(source: '''
+                  footer, .site-header, .site-footer, #mobilebar, .page-title { display: none !important; }
+                  body { padding-top: 0 !important; }
+                  #top { padding-top: 1rem; }
+                ''');
+              } else {
+                // CSS voor andere pagina's
+                await controller.injectCSSCode(source: '''
+                  footer, .site-header, .site-footer, #mobilebar { display: none !important; }
+                  body { padding-top: 0 !important; }
+                  #top { padding-top: 1rem; }
+                ''');
+              }
 
               setState(() => _isLoading = false);
             },
