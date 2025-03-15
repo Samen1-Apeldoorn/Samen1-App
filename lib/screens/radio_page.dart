@@ -61,6 +61,7 @@ class _RadioPageState extends State<RadioPage> {
                     footer, .site-header, .site-footer, #mobilebar, .page-title { display: none !important; }
                     body { padding-top: 0 !important; }
                     #top { padding-top: 1rem; }
+                    #anchornav { top: 0; }
                   ''');
 
                   // Stop de laadindicator als de pagina geladen is
