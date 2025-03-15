@@ -73,13 +73,6 @@ class _TVPageState extends State<TVPage> {
         }
       });
   }
-
-  /// Schakelt de debug informatie aan/uit
-  void _toggleDebugInfo() {
-    setState(() {
-      _showDebugInfo = !_showDebugInfo;
-    });
-  }
   
   /// Schakelt tussen normaal en volledig scherm
   void _toggleFullScreen() async {
