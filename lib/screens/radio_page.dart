@@ -78,7 +78,7 @@ class _RadioPageState extends State<RadioPage> {
 
                     var logo = document.getElementById('top');
                     if (logo) {
-                      logo.style.paddingTop = '4rem'; // Add quotes to make it a string with a unit
+                      logo.style.paddingTop = '3rem'; // Add quotes to make it a string with a unit
                     }
 
                   ''');
