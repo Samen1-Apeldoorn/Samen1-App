@@ -4,7 +4,7 @@ import 'package:workmanager/workmanager.dart';
 import 'screens/news_page.dart';
 import 'screens/radio_page.dart';
 import 'screens/tv_page.dart';
-import 'screens/notifications_page.dart';
+import 'screens/settings_page.dart';
 import 'services/notification_service.dart';
 import 'services/rss_service.dart';
 
@@ -68,7 +68,7 @@ class _MainScreenState extends State<MainScreen> {
     NewsPage(),
     RadioPage(),
     TVPage(),
-    NotificationsPage(),
+    SettingsPage(),
   ];
 
   @override
@@ -86,7 +86,7 @@ class _MainScreenState extends State<MainScreen> {
           BottomNavigationBarItem(icon: Icon(Icons.newspaper), label: 'Nieuws'),
           BottomNavigationBarItem(icon: Icon(Icons.radio), label: 'Radio'),
           BottomNavigationBarItem(icon: Icon(Icons.tv), label: 'TV'),
-          BottomNavigationBarItem(icon: Icon(Icons.notifications), label: 'Meldingen'),
+          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Instellingen'),
         ],
       ),
     );
