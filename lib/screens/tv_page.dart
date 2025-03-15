@@ -18,7 +18,7 @@ class _TVPageState extends State<TVPage> {
   // Status variabelen
   bool _isError = false;
   bool _isLoading = true;
-  bool _showDebugInfo = false;
+  final bool _showDebugInfo = false;
   bool _isFullScreen = false;
   bool _isExitingFullScreen = false;
   
@@ -57,7 +57,6 @@ class _TVPageState extends State<TVPage> {
           });
         }
       }).catchError((error) {
-        print("Fout bij het initialiseren van de stream: $error");
         if (mounted) {
           setState(() {
             _isError = true;
@@ -68,7 +67,6 @@ class _TVPageState extends State<TVPage> {
       // Luister naar eventuele fouten tijdens het afspelen
       ..addListener(() {
         if (_controller.value.hasError && mounted && !_isError) {
-          print("Video player fout: ${_controller.value.errorDescription}");
           setState(() => _isError = true);
         }
       });
