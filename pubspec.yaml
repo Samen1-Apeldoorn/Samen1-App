@@ -1,0 +1,36 @@
+name: samen1appv5
+description: "Samen1 mobile application"
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.2.3 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  flutter_inappwebview: ^6.0.0
+  wakelock_plus: ^1.1.4
+  workmanager:
+    git:
+      url: https://github.com/fluttercommunity/flutter_workmanager.git
+      path: workmanager
+      ref: main
+  flutter_local_notifications: ^18.0.1
+  shared_preferences: ^2.2.2
+  http: ^1.1.2
+  url_launcher: ^6.2.2
+  
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+  # Uncomment when adding images
+  # assets:
+  #   - assets/images/
+
