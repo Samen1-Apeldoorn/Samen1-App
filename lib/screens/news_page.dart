@@ -16,11 +16,6 @@ class _NewsPageState extends State<NewsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nieuws'),
-        backgroundColor: const Color(0xFFFA6401),
-        foregroundColor: Colors.white,
-      ),
       body: Stack(  // Hier beginnen we de lijst van widgets
         children: <Widget>[  // Zorg ervoor dat we een lijst van widgets doorgeven
           // WebView - deze is verborgen totdat de pagina is geladen

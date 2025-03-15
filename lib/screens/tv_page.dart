@@ -169,19 +169,6 @@ class _TVPageState extends State<TVPage> {
     
     // Normale weergave met AppBar
     return Scaffold(
-      appBar: _isFullScreen ? null : AppBar(
-        title: const Text('TV'),
-        backgroundColor: const Color(0xFFFA6401),
-        foregroundColor: Colors.white,
-        actions: [
-          // Debug knop voor ontwikkelaars
-          IconButton(
-            icon: Icon(_showDebugInfo ? Icons.bug_report : Icons.bug_report_outlined),
-            onPressed: _toggleDebugInfo,
-            tooltip: 'Debug informatie',
-          ),
-        ],
-      ),
       body: OrientationBuilder(
         builder: (context, orientation) {
           // Alleen reageren op oriëntatie als we niet bezig zijn met de transitie

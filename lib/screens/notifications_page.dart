@@ -48,11 +48,6 @@ class _NotificationsPageState extends State<NotificationsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Meldingen'),
-        backgroundColor: const Color(0xFFFA6401),
-        foregroundColor: Colors.white,
-      ),
       body: ListView(
         children: [
           SwitchListTile(

@@ -28,11 +28,6 @@ class _RadioPageState extends State<RadioPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Radio'),
-        backgroundColor: const Color(0xFFFA6401),
-        foregroundColor: Colors.white,
-      ),
       body: Stack(
         children: [
           // WebView - deze is verborgen totdat de pagina is geladen
