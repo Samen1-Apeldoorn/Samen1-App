@@ -22,7 +22,6 @@ dependencies:
   http: ^1.1.2
   url_launcher: ^6.2.2
   video_player: ^2.7.2
-  flutter_hls_parser: ^2.0.0  # Add this package
 
 dev_dependencies:
   flutter_test:
