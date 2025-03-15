@@ -189,15 +189,15 @@ packages:
       sha256: d8c680abfb6fec71609a700199635d38a744df0febd5544c5a020bd73de8ee07
       url: "https://pub.dev"
     source: hosted
-    version: "1.1.2"
-  flutter_inappwebview_windows:
-    dependency: transitive
+    version: "1.0.8"
+  flutter_launcher_icons:
+    dependency: "direct main"
     description:
-      name: flutter_inappwebview_windows
-      sha256: "8b4d3a46078a2cdc636c4a3d10d10f2a16882f6be607962dbfff8874d1642055"
+      name: flutter_launcher_icons
+      sha256: a9de6706cd844668beac27c0aed5910fa0534832b3c2cad61a5fd977fce82a5d
       url: "https://pub.dev"
     source: hosted
-    version: "0.6.0"
+    version: "0.10.0"
   flutter_lints:
     dependency: "direct dev"
     description:
@@ -264,6 +264,30 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "4.1.2"
+  image:
+    dependency: transitive
+    description:
+      name: image
+      sha256: "8e9d133755c3e84c73288363e6343157c383a0c6c56fc51afcc5d4d7180306d6"
+      url: "https://pub.dev"
+    source: hosted
+    version: "3.3.0"
+  js:
+    dependency: transitive
+    description:
+      name: js
+      sha256: f2c445dce49627136094980615a031419f7f3eb393237e4ecd97ac15dea343f3
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.6.7"
+  json_annotation:
+    dependency: transitive
+    description:
+      name: json_annotation
+      sha256: "1ce844379ca14835a50d2f019a3099f419082cfdd231cd86a142af94dd5c6bb1"
+      url: "https://pub.dev"
+    source: hosted
+    version: "4.9.0"
   leak_tracker:
     dependency: transitive
     description:

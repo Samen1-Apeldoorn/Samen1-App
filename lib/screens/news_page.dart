@@ -45,12 +45,20 @@ class _NewsPageState extends State<NewsPage> {
                 onLoadStop: (controller, url) async {
                   await controller.evaluateJavascript(source: '''
                     document.querySelector('.play-button')?.click();
+
                     var navbar = document.getElementById('mobilebar');
                     if(navbar) navbar.remove();
+
                     var header = document.getElementsByClassName('page-title')[0];
                     if(header) header.remove();
+
                     var headerContainer = document.getElementById('top');
                     if(headerContainer) headerContainer.style.paddingTop = 0;
+                    
+                    var logo = document.getElementById('top');
+                    if (logo) {
+                      logo.style.paddingTop = '5rem'; // Add quotes to make it a string with a unit
+                    }
                   ''');
 
                   await controller.injectCSSCode(source: '''
