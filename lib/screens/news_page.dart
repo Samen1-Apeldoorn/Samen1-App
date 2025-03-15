@@ -12,71 +12,73 @@ class NewsPage extends StatefulWidget {
 class _NewsPageState extends State<NewsPage> {
   bool _isLoading = true;  // Laadstatus bijhouden
   bool _isWebViewVisible = false;  // Website zichtbaarheid bijhouden
+  InAppWebViewController? _webViewController;  // Controller voor de WebView
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: Stack(  // Hier beginnen we de lijst van widgets
-        children: <Widget>[  // Zorg ervoor dat we een lijst van widgets doorgeven
-          // WebView - deze is verborgen totdat de pagina is geladen
-          AnimatedOpacity(
-            opacity: _isWebViewVisible ? 1.0 : 0.0,  // Webview zichtbaar maken zodra geladen
-            duration: const Duration(milliseconds: 500),
-            child: InAppWebView(
-              initialUrlRequest: URLRequest(url: WebUri('https://samen1.nl/nieuws/')),
-              onLoadStart: (controller, url) {
-                setState(() {
-                  _isLoading = true;  // Start loading indicator
-                });
-              },
-              onLoadStop: (controller, url) async {
-                // Eerst de JavaScript-code uitvoeren voordat we de webview zichtbaar maken
-                await controller.evaluateJavascript(source: '''
-                  document.querySelector('.play-button')?.click();
+    return WillPopScope(
+      onWillPop: () async {
+        if (await _webViewController?.canGoBack() ?? false) {
+          // Als de webview een geschiedenis heeft, ga dan terug naar de vorige pagina
+          _webViewController?.goBack();
+          return false;  // Voorkom dat de app sluit
+        }
+        return true;  // Sluit de app als er geen geschiedenis is
+      },
+      child: Scaffold(
+        body: Stack(
+          children: <Widget>[
+            // WebView - deze is verborgen totdat de pagina is geladen
+            AnimatedOpacity(
+              opacity: _isWebViewVisible ? 1.0 : 0.0,  // Webview zichtbaar maken zodra geladen
+              duration: const Duration(milliseconds: 500),
+              child: InAppWebView(
+                initialUrlRequest: URLRequest(url: WebUri('https://samen1.nl/nieuws/')),
+                onWebViewCreated: (controller) {
+                  _webViewController = controller;  // Initialiseer de controller
+                },
+                onLoadStart: (controller, url) {
+                  setState(() {
+                    _isLoading = true;  // Start loading indicator
+                  });
+                },
+                onLoadStop: (controller, url) async {
+                  await controller.evaluateJavascript(source: '''
+                    document.querySelector('.play-button')?.click();
+                    var navbar = document.getElementById('mobilebar');
+                    if(navbar) navbar.remove();
+                    var header = document.getElementsByClassName('page-title')[0];
+                    if(header) header.remove();
+                    var headerContainer = document.getElementById('top');
+                    if(headerContainer) headerContainer.style.paddingTop = 0;
+                  ''');
 
-                  var navbar = document.getElementById('mobilebar');
-                  if(navbar){
-                    navbar.remove();
+                  await controller.injectCSSCode(source: '''
+                    footer, .site-header, .site-footer { display: none !important; }
+                    body { padding-top: 0 !important; }
+                  ''');
+
+                  setState(() {
+                    _isLoading = false;  // Stop loading
+                    _isWebViewVisible = true;  // Maak de webpagina zichtbaar
+                  });
+                },
+                shouldOverrideUrlLoading: (controller, navigation) async {
+                  final url = navigation.request.url.toString();
+                  if (!url.contains('samen1.nl')) {
+                    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                    return NavigationActionPolicy.CANCEL;
                   }
-
-                  var header = document.getElementsByClassName('page-title')[0];
-                  if(header){
-                    header.remove();
-                  }
-
-                  var headerContainer = document.getElementById('top');
-                  if(headerContainer){
-                    headerContainer.style.paddingTop = 0;
-                  }
-                ''');
-
-                // Injecteer CSS om elementen te verbergen
-                await controller.injectCSSCode(source: '''
-                  footer, .site-header, .site-footer { display: none !important; }
-                  body { padding-top: 0 !important; }
-                ''');
-
-                // Stop de laadindicator als de pagina geladen is
-                setState(() {
-                  _isLoading = false;  // Stop loading
-                  _isWebViewVisible = true;  // Maak de webpagina zichtbaar
-                });
-              },
-              shouldOverrideUrlLoading: (controller, navigation) async {
-                final url = navigation.request.url.toString();
-                if (!url.contains('samen1.nl')) {
-                  launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                  return NavigationActionPolicy.CANCEL;
-                }
-                return NavigationActionPolicy.ALLOW;
-              },
+                  return NavigationActionPolicy.ALLOW;
+                },
+              ),
             ),
-          ),
-          if (_isLoading)  // Laadindicator zichtbaar zolang _isLoading true is
-            const Center(
-              child: CircularProgressIndicator(),
-            ),
-        ],
+            if (_isLoading)  // Laadindicator zichtbaar zolang _isLoading true is
+              const Center(
+                child: CircularProgressIndicator(),
+              ),
+          ],
+        ),
       ),
     );
   }
