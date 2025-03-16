@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter/services.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 class RadioPage extends StatefulWidget {
@@ -28,6 +29,12 @@ class _RadioPageState extends State<RadioPage> {
 
   @override
   Widget build(BuildContext context) {
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent, // Transparante achtergrond
+      statusBarIconBrightness: Brightness.dark, // Donkere icoontjes (voor een lichte achtergrond)
+      systemNavigationBarColor: Colors.white, // Optioneel: pas de navigatiebalk aan
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ));
     return WillPopScope(
       onWillPop: () async {
         if (await _webViewController?.canGoBack() ?? false) {

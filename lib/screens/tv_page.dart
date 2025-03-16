@@ -139,6 +139,12 @@ class _TVPageState extends State<TVPage> {
 
   @override
   Widget build(BuildContext context) {
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent, // Transparante achtergrond
+      statusBarIconBrightness: Brightness.dark, // Donkere icoontjes (voor een lichte achtergrond)
+      systemNavigationBarColor: Colors.white, // Optioneel: pas de navigatiebalk aan
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ));
     // Als we in fullscreen modus zijn, toon alleen de video
     if (_isFullScreen) {
       return WillPopScope(

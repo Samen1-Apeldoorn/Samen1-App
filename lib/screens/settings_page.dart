@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter/services.dart';
 import '../services/rss_service.dart';
 import '../services/notification_service.dart';
 
@@ -34,7 +35,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notifications_enabled', _notificationsEnabled);
     await prefs.setString('check_interval', _checkInterval);
-    
+
     if (_notificationsEnabled) {
       await Workmanager().registerPeriodicTask(
         'samen1-rss-check',
@@ -52,7 +53,7 @@ class _SettingsPageState extends State<SettingsPage> {
       path: 'floris.vandenbroek@samen1.nl',
       query: 'subject=Feedback Samen1 App',
     );
-    
+
     if (!await launchUrl(emailLaunchUri)) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -73,7 +74,7 @@ class _SettingsPageState extends State<SettingsPage> {
             '2. Selecteer "App-info"\n'
             '3. Tik op "Batterij"\n'
             '4. Selecteer "Onbeperkt" of "Niet optimaliseren"\n'
-            '5. Bevestig je keuze'
+            '5. Bevestig je keuze',
           ),
           actions: [
             TextButton(
@@ -109,8 +110,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         ),
                   ),
                   initiallyExpanded: true,
-                  shape: const Border(), // removes the bottom line
-                  collapsedShape: const Border(), // removes the top line
+                  shape: const Border(),
+                  collapsedShape: const Border(),
                   children: [
                     SwitchListTile(
                       title: const Text('Meldingen inschakelen'),

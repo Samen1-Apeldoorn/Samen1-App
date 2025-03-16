@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
+import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Move this class to the beginning of the file for better visibility/export
@@ -18,6 +19,12 @@ class _NewsArticleScreenState extends State<NewsArticleScreen> {
 
   @override
   Widget build(BuildContext context) {
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent, // Transparante achtergrond
+      statusBarIconBrightness: Brightness.dark, // Donkere icoontjes (voor een lichte achtergrond)
+      systemNavigationBarColor: Colors.white, // Optioneel: pas de navigatiebalk aan
+      systemNavigationBarIconBrightness: Brightness.dark,
+    ));
     return Scaffold(
       appBar: AppBar(
         title: const Text('Samen1 Nieuws'),

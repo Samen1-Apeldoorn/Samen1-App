@@ -14,7 +14,15 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
-  
+
+  // Stel de statusbalkkleur en icoontjes in
+  SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+    statusBarColor: Colors.transparent, // Transparante achtergrond
+    statusBarIconBrightness: Brightness.dark, // Donkere icoontjes (voor een lichte achtergrond)
+    systemNavigationBarColor: Colors.white, // Optioneel: pas de navigatiebalk aan
+    systemNavigationBarIconBrightness: Brightness.dark,
+  ));
+
   // Initialize notifications first
   await NotificationService.initialize();
   
