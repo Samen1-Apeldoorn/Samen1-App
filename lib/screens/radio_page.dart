@@ -53,29 +53,24 @@ class _RadioPageState extends State<RadioPage> {
               duration: const Duration(milliseconds: 500),
               child: InAppWebView(
                 initialUrlRequest: URLRequest(url: WebUri('https://samen1.nl/radio/')),
-                onLoadStart: (controller, url) {
+                onLoadStart: (controller, url) async {
                   setState(() {
                     _isLoading = true;  // Start loading indicator
                   });
-                },
-                onLoadStop: (controller, url) async {
-                  // Eerst de JavaScript-code uitvoeren voordat we de webview zichtbaar maken
                   await controller.evaluateJavascript(source: '''
                     document.querySelector('.play-button')?.click();
                   ''');
 
-                  await controller.injectCSSCode(source: '''
-                    footer, .site-header, .site-footer, #mobilebar, .page-title { display: none !important; }
-                    body { padding-top: 0 !important; }
-                    #top { padding-top: 1rem; }
-                    #anchornav { top: 0; padding-top: 3rem }
-                  ''');
-
+                  await _injectCSS(controller, url.toString());
+                },
+                onLoadStop: (controller, url) async {
                   // Stop de laadindicator als de pagina geladen is
                   setState(() {
                     _isLoading = false;  // Stop loading
                     _isWebViewVisible = true;  // Maak de webpagina zichtbaar
                   });
+
+                  await _injectCSS(controller, url.toString());
                 },
                 onWebViewCreated: (controller) {
                   _webViewController = controller;  // Initialiseer de controller
@@ -90,5 +85,25 @@ class _RadioPageState extends State<RadioPage> {
         ),
       ),
     );
+  }
+
+  Future<void> _injectCSS(InAppWebViewController controller, String url) async {
+    String cssCode;
+    if (url == 'https://samen1.nl/radio/') {
+      cssCode = '''
+                    footer, .site-header, .site-footer, #mobilebar, .page-title { display: none !important; }
+                    body { padding-top: 0 !important; }
+                    #top { padding-top: 1rem; }
+                    #anchornav { top: 0; padding-top: 3rem }
+                  ''';
+    } else {
+      cssCode = '''
+                    footer, .site-header, .site-footer, #mobilebar { display: none !important; }
+                    body { padding-top: 0 !important; }
+                    #top { padding-top: 1rem; }
+                    #anchornav { top: 0; padding-top: 3rem }
+                  ''';
+    }
+    await controller.injectCSSCode(source: cssCode);
   }
 }
