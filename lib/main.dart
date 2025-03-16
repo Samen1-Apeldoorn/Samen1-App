@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:workmanager/workmanager.dart';
-import 'screens/news_page.dart'; 
+import 'screens/news_page.dart';
 import 'screens/radio_page.dart';
 import 'screens/tv_page.dart';
 import 'screens/settings_page.dart';
@@ -88,11 +88,13 @@ class MainScreen extends StatefulWidget {
 
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
-  final _pages = const [
-    NewsPage(),
-    RadioPage(),
-    TVPage(),
-    SettingsPage(),
+
+  // In plaats van de lijst van gewone widgets, maken we hier een lijst van StatefulWidgets
+  final List<Widget> _pages = [
+    NewsPage(key: UniqueKey()),
+    RadioPage(key: UniqueKey()),
+    TVPage(key: UniqueKey()),
+    SettingsPage(key: UniqueKey()),
   ];
 
   @override
@@ -101,7 +103,18 @@ class _MainScreenState extends State<MainScreen> {
       body: _pages[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (index) {
+          // Herlaad de pagina door de huidige pagina opnieuw te creëren
+          if (index == _currentIndex) {
+            setState(() {
+              _pages[_currentIndex] = _getPageByIndex(_currentIndex);
+            });
+          } else {
+            setState(() {
+              _currentIndex = index;
+            });
+          }
+        },
         type: BottomNavigationBarType.fixed,
         backgroundColor: const Color(0xFFFA6401),
         selectedItemColor: Colors.white,
@@ -114,5 +127,21 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
     );
+  }
+
+  // Functie om de pagina opnieuw te creëren met een nieuwe sleutel
+  Widget _getPageByIndex(int index) {
+    switch (index) {
+      case 0:
+        return NewsPage(key: UniqueKey());
+      case 1:
+        return RadioPage(key: UniqueKey());
+      case 2:
+        return TVPage(key: UniqueKey());
+      case 3:
+        return SettingsPage(key: UniqueKey());
+      default:
+        return NewsPage(key: UniqueKey()); // Terug naar standaardpagina als iets misgaat
+    }
   }
 }
