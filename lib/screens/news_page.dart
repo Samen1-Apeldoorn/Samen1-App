@@ -3,9 +3,10 @@ import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// Move this class to the beginning of the file for better visibility/export
 class NewsArticleScreen extends StatefulWidget {
   final String articleUrl;
-
+  
   const NewsArticleScreen({super.key, required this.articleUrl});
 
   @override
@@ -19,12 +20,11 @@ class _NewsArticleScreenState extends State<NewsArticleScreen> {
   @override
   Widget build(BuildContext context) {
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent, 
-      statusBarIconBrightness: Brightness.dark, 
-      systemNavigationBarColor: Colors.white, 
+      statusBarColor: Colors.transparent, // Transparante achtergrond
+      statusBarIconBrightness: Brightness.dark, // Donkere icoontjes (voor een lichte achtergrond)
+      systemNavigationBarColor: Colors.white, // Optioneel: pas de navigatiebalk aan
       systemNavigationBarIconBrightness: Brightness.dark,
     ));
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Samen1 Nieuws'),
@@ -42,25 +42,26 @@ class _NewsArticleScreenState extends State<NewsArticleScreen> {
             onWebViewCreated: (controller) {
               _webViewController = controller;
             },
-            onLoadStart: (controller, url) async {
+            onLoadStart: (controller, url) {
               setState(() => _isLoading = true);
-
-              // Injecteer CSS direct bij het starten van het laden
-              if (url.toString() == "https://samen1.nl/nieuws/") {
+            },
+            onLoadStop: (controller, url) async {
+              if (url.toString() == 'https://samen1.nl/nieuws/') {
+                // CSS voor de homepage
                 await controller.injectCSSCode(source: '''
                   footer, .site-header, .site-footer, #mobilebar, .page-title { display: none !important; }
                   body { padding-top: 0 !important; }
                   #top { padding-top: 1rem; }
                 ''');
               } else {
+                // CSS voor andere pagina's
                 await controller.injectCSSCode(source: '''
                   footer, .site-header, .site-footer, #mobilebar { display: none !important; }
                   body { padding-top: 0 !important; }
                   #top { padding-top: 1rem; }
                 ''');
               }
-            },
-            onLoadStop: (controller, url) async {
+
               setState(() => _isLoading = false);
             },
             shouldOverrideUrlLoading: (controller, navigation) async {
@@ -88,56 +89,60 @@ class NewsPage extends StatefulWidget {
 }
 
 class _NewsPageState extends State<NewsPage> {
-  bool _isLoading = true;
-  bool _isWebViewVisible = false;
-  InAppWebViewController? _webViewController;
+  bool _isLoading = true;  // Laadstatus bijhouden
+  bool _isWebViewVisible = false;  // Website zichtbaarheid bijhouden
+  InAppWebViewController? _webViewController;  // Controller voor de WebView
 
   @override
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
         if (await _webViewController?.canGoBack() ?? false) {
+          // Als de webview een geschiedenis heeft, ga dan terug naar de vorige pagina
           _webViewController?.goBack();
-          return false;
+          return false;  // Voorkom dat de app sluit
         }
-        return true;
+        return true;  // Sluit de app als er geen geschiedenis is
       },
       child: Scaffold(
         body: Stack(
           children: <Widget>[
+            // WebView - deze is verborgen totdat de pagina is geladen
             AnimatedOpacity(
-              opacity: _isWebViewVisible ? 1.0 : 0.0,
+              opacity: _isWebViewVisible ? 1.0 : 0.0,  // Webview zichtbaar maken zodra geladen
               duration: const Duration(milliseconds: 500),
               child: InAppWebView(
                 initialUrlRequest: URLRequest(url: WebUri('https://samen1.nl/nieuws/')),
                 onWebViewCreated: (controller) {
-                  _webViewController = controller;
+                  _webViewController = controller;  // Initialiseer de controller
                 },
-                onLoadStart: (controller, url) async {
+                onLoadStart: (controller, url) {
                   setState(() {
-                    _isLoading = true;
-                    _isWebViewVisible = false;
+                    _isLoading = true;  // Start loading indicator
+                    _isWebViewVisible = false;  // Webview blijft verborgen tijdens het laden
                   });
-
-                  // Injecteer CSS direct bij het starten van het laden
-                  if (url.toString() == "https://samen1.nl/nieuws/") {
+                },
+                onLoadStop: (controller, url) async {
+                  // Controleer de URL en pas de CSS aan op basis van de pagina
+                  if (url.toString() == 'https://samen1.nl/nieuws/') {
+                    // CSS voor de homepage
                     await controller.injectCSSCode(source: '''
                       footer, .site-header, .site-footer, #mobilebar, .page-title { display: none !important; }
                       body { padding-top: 0 !important; }
                       #top { padding-top: 1rem; }
                     ''');
                   } else {
+                    // CSS voor andere pagina's
                     await controller.injectCSSCode(source: '''
                       footer, .site-header, .site-footer, #mobilebar { display: none !important; }
                       body { padding-top: 0 !important; }
                       #top { padding-top: 1rem; }
                     ''');
                   }
-                },
-                onLoadStop: (controller, url) async {
+
                   setState(() {
-                    _isLoading = false;
-                    _isWebViewVisible = true; // Pas zichtbaarheid aan na CSS injectie
+                    _isLoading = false;  // Stop loading
+                    _isWebViewVisible = true;  // Maak de webpagina zichtbaar
                   });
                 },
                 shouldOverrideUrlLoading: (controller, navigation) async {
@@ -150,8 +155,11 @@ class _NewsPageState extends State<NewsPage> {
                 },
               ),
             ),
+            // Laadindicator zichtbaar zolang _isLoading true is
             if (_isLoading)
-              const Center(child: CircularProgressIndicator()),
+              const Center(
+                child: CircularProgressIndicator(),
+              ),
           ],
         ),
       ),
