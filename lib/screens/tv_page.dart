@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
+import 'dart:async'; // Add for better async handling
 
 /// Scherm voor het afspelen van de Samen1 TV livestream.
 /// Deze pagina gebruikt een native video player om de HLS stream af te spelen.
@@ -11,7 +12,7 @@ class TVPage extends StatefulWidget {
   State<TVPage> createState() => _TVPageState();
 }
 
-class _TVPageState extends State<TVPage> {
+class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
   // Controller voor de video player
   late VideoPlayerController _controller;
   
@@ -21,6 +22,9 @@ class _TVPageState extends State<TVPage> {
   final bool _showDebugInfo = false;
   bool _isFullScreen = false;
   bool _isExitingFullScreen = false;
+  Timer? _initRetryTimer;
+  int _retryCount = 0;
+  static const int _maxRetryCount = 3;
   
   // De constante URL naar de HLS stream
   static const String _hlsStreamUrl = 
@@ -29,49 +33,134 @@ class _TVPageState extends State<TVPage> {
   @override
   void initState() {
     super.initState();
-    // Start direct met het initialiseren van de video player
-    _initializeVideoPlayer();
+    WidgetsBinding.instance.addObserver(this); // Add lifecycle observer
+    
+    // Delay initialization slightly to improve UI responsiveness
+    Future.delayed(const Duration(milliseconds: 200), () {
+      if (mounted) _initializeVideoPlayer();
+    });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Optimize resource usage when app goes to background
+    if (state == AppLifecycleState.paused) {
+      _controller.pause();
+    } else if (state == AppLifecycleState.resumed) {
+      // Check if player is in good state before resuming
+      if (_controller.value.isInitialized && !_isError) {
+        _controller.play();
+      } else {
+        // Reinitialize if needed
+        _disposeAndRecreatePlayer();
+      }
+    }
   }
 
   /// Initialiseert de video player met de HLS stream
-  void _initializeVideoPlayer() {
+  Future<void> _initializeVideoPlayer() async {
+    if (!mounted) return;
+    
     setState(() {
       _isLoading = true;
       _isError = false;
     });
 
-    // Maak een nieuwe video controller met de HLS stream URL
-    _controller = VideoPlayerController.networkUrl(
-      Uri.parse(_hlsStreamUrl),
-      // User-Agent header kan helpen bij toegang tot de stream
-      httpHeaders: {'User-Agent': 'Samen1TV-App'},
-      // Geef aan dat het een HLS stream is
-      formatHint: VideoFormat.hls,
-    )
-      // Initialiseer de controller en start het afspelen
-      ..initialize().then((_) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _controller.play();
-          });
-        }
-      }).catchError((error) {
-        if (mounted) {
-          setState(() {
-            _isError = true;
-            _isLoading = false;
-          });
-        }
-      })
-      // Luister naar eventuele fouten tijdens het afspelen
-      ..addListener(() {
-        if (_controller.value.hasError && mounted && !_isError) {
-          setState(() => _isError = true);
-        }
-      });
+    // Cancel any pending retry timer
+    _initRetryTimer?.cancel();
+
+    try {
+      // Maak een nieuwe video controller met de HLS stream URL
+      _controller = VideoPlayerController.networkUrl(
+        Uri.parse(_hlsStreamUrl),
+        httpHeaders: {
+          'User-Agent': 'Samen1TV-App/1.0',
+          'Connection': 'keep-alive',
+        },
+        formatHint: VideoFormat.hls,
+        videoPlayerOptions: VideoPlayerOptions(
+          mixWithOthers: false,
+          allowBackgroundPlayback: false,
+        ),
+      );
+      
+      // Use a timeout to avoid hanging initialization
+      await _controller.initialize().timeout(
+        const Duration(seconds: 15),
+        onTimeout: () {
+          throw TimeoutException('Video initialization timed out');
+        },
+      );
+      
+      // Only proceed if still mounted after async operation
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _retryCount = 0; // Reset retry count on success
+        });
+        
+        _controller.addListener(_onVideoStatusChanged);
+        _controller.setLooping(true);
+        await _controller.play();
+      }
+    } catch (error) {
+      if (mounted) {
+        // If there's an initialization error, try to recover
+        _handleInitializationError();
+      }
+    }
   }
   
+  void _handleInitializationError() {
+    // Clean up the failed controller
+    if (_controller.value.isInitialized) {
+      _controller.removeListener(_onVideoStatusChanged);
+      _controller.dispose();
+    }
+
+    if (_retryCount < _maxRetryCount) {
+      // Incremental backoff for retries
+      final retryDelay = Duration(seconds: (_retryCount + 1) * 2);
+      _retryCount++;
+      
+      setState(() {
+        _isLoading = true;
+        _isError = false;
+      });
+      
+      // Retry initialization after delay
+      _initRetryTimer = Timer(retryDelay, _initializeVideoPlayer);
+    } else {
+      // After max retries, show error state
+      setState(() {
+        _isError = true;
+        _isLoading = false;
+      });
+    }
+  }
+  
+  void _onVideoStatusChanged() {
+    // Handle error state changes
+    final hasError = _controller.value.hasError;
+    
+    if (hasError && mounted && !_isError) {
+      setState(() => _isError = true);
+    }
+    
+    // Handle video size changes for better layout
+    if (_controller.value.isInitialized && mounted) {
+      // Force rebuild if video size changed significantly
+      setState(() {});
+    }
+  }
+  
+  // Clean method to dispose and recreate player
+  void _disposeAndRecreatePlayer() {
+    _controller.removeListener(_onVideoStatusChanged);
+    _controller.dispose();
+    _initializeVideoPlayer();
+  }
+
   /// Schakelt tussen normaal en volledig scherm
   void _toggleFullScreen() async {
     // Als we al bezig zijn met de transitie, doe niets
@@ -124,52 +213,65 @@ class _TVPageState extends State<TVPage> {
 
   @override
   void dispose() {
-    // Reset de oriëntatie voorkeuren bij het afsluiten
+    // Clean up resources
+    _initRetryTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    
+    if (_controller.value.isInitialized) {
+      _controller.removeListener(_onVideoStatusChanged);
+      _controller.dispose();
+    }
+    
+    // Reset orientation preferences when exiting
     SystemChrome.setPreferredOrientations([]);
-    // Zorg dat alle UI overlays weer zichtbaar zijn bij het afsluiten van het scherm
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
     
-    // Belangrijk: ruim de controller netjes op
-    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    // Optimize UI overlay setting - only set once per build
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent, // Transparante achtergrond
-      statusBarIconBrightness: Brightness.dark, // Donkere icoontjes (voor een lichte achtergrond)
-      systemNavigationBarColor: Colors.white, // Optioneel: pas de navigatiebalk aan
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.dark,
+      systemNavigationBarColor: Colors.white,
       systemNavigationBarIconBrightness: Brightness.dark,
     ));
-    // Als we in fullscreen modus zijn, toon alleen de video
-    if (_isFullScreen) {
-      return WillPopScope(
-        // Handel terug-knop af om fullscreen mode te verlaten
-        onWillPop: () async {
-          if (_isFullScreen) {
-            _toggleFullScreen();
-            return false;
-          }
-          return true;
-        },
-        // Gebruik geen Scaffold in fullscreen modus om alle UI elementen te vermijden
-        child: Container(
-          color: Colors.black,
-          child: _buildFullScreenPlayer(),
-        ),
-      );
-    }
     
-    // Normale weergave met AppBar
+    // Return optimized fullscreen or normal layout
+    return _isFullScreen 
+        ? _buildFullscreenLayout()
+        : _buildNormalLayout();
+  }
+  
+  Widget _buildFullscreenLayout() {
+    return WillPopScope(
+      onWillPop: () async {
+        if (_isFullScreen) {
+          _toggleFullScreen();
+          return false;
+        }
+        return true;
+      },
+      child: ColoredBox(
+        color: Colors.black,
+        child: _buildFullScreenPlayer(),
+      ),
+    );
+  }
+  
+  Widget _buildNormalLayout() {
     return Scaffold(
       body: OrientationBuilder(
         builder: (context, orientation) {
-          // Alleen reageren op oriëntatie als we niet bezig zijn met de transitie
-          if (orientation == Orientation.landscape && !_isFullScreen && !_isExitingFullScreen) {
+          // Only respond to orientation if not in transition
+          if (orientation == Orientation.landscape && 
+              !_isFullScreen && 
+              !_isExitingFullScreen) {
             WidgetsBinding.instance.addPostFrameCallback((_) {
               if (mounted && !_isFullScreen && !_isExitingFullScreen) {
                 _toggleFullScreen();
@@ -177,7 +279,7 @@ class _TVPageState extends State<TVPage> {
             });
           }
           
-          // Centreer de video verticaal in het scherm
+          // Simplified layout with error boundary
           return Center(
             child: AspectRatio(
               aspectRatio: 16 / 9,
@@ -191,35 +293,31 @@ class _TVPageState extends State<TVPage> {
 
   /// Bouwt een volledig-scherm-vullende videoplayer
   Widget _buildFullScreenPlayer() {
+    if (!_controller.value.isInitialized) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    
+    // More efficient widget structure
     return Stack(
       children: [
-        // Gebruik Center en AspectRatio voor het centreren van de video
+        // Optimized video display
         Center(
-          child: Container(
-            width: double.infinity,
-            height: double.infinity,
-            color: Colors.black,
-            child: _controller.value.isInitialized
-                ? FittedBox(
-                    fit: BoxFit.contain, // Behoud aspect ratio maar vul zo veel mogelijk ruimte
-                    child: SizedBox(
-                      width: _controller.value.size.width,
-                      height: _controller.value.size.height,
-                      child: VideoPlayer(_controller),
-                    ),
-                  )
-                : const Center(child: CircularProgressIndicator()),
-          ),
+          child: _controller.value.isInitialized
+              ? AspectRatio(
+                  aspectRatio: _controller.value.aspectRatio,
+                  child: VideoPlayer(_controller),
+                )
+              : const SizedBox.shrink(),
         ),
         
-        // Video bedieningselementen
+        // Video controls
         _VideoControls(
           controller: _controller,
           onToggleFullScreen: _toggleFullScreen,
           isFullScreen: true,
         ),
         
-        // Debug overlay (indien ingeschakeld)
+        // Debug overlay
         if (_showDebugInfo)
           Positioned(
             top: 8,
@@ -253,9 +351,7 @@ class _TVPageState extends State<TVPage> {
             ElevatedButton(
               onPressed: () {
                 // Probeer opnieuw te laden
-                if (_controller.value.isInitialized) {
-                  _controller.dispose();
-                }
+                _controller.dispose();
                 _initializeVideoPlayer();
               },
               child: const Text('Probeer opnieuw'),
@@ -342,6 +438,7 @@ class _VideoControlsState extends State<_VideoControls> {
   // Bepaalt of de besturingselementen zichtbaar zijn
   bool _showControls = true;
   late bool _isPlaying;
+  Timer? _hideTimer;
 
   @override
   void initState() {
@@ -357,72 +454,112 @@ class _VideoControlsState extends State<_VideoControls> {
 
   /// Start een timer om de besturingselementen na 3 seconden te verbergen
   void _startHideTimer() {
-    Future.delayed(const Duration(seconds: 3), () {
+    // Cancel any existing timer first
+    _hideTimer?.cancel();
+    
+    // Set a new timer
+    _hideTimer = Timer(const Duration(seconds: 3), () {
       if (mounted && _isPlaying) {
         setState(() => _showControls = false);
       }
     });
   }
+  
+  /// Explicitly show the controls and restart the hide timer
+  void _showControlsWithTimer() {
+    if (mounted) {
+      setState(() => _showControls = true);
+      _startHideTimer();
+    }
+  }
 
   /// Update de lokale status wanneer de controller verandert
   void _updateState() {
     if (mounted) {
-      setState(() {
-        _isPlaying = widget.controller.value.isPlaying;
-      });
+      final wasPlaying = _isPlaying;
+      _isPlaying = widget.controller.value.isPlaying;
+      
+      // If playback state changed, update the controls visibility
+      if (wasPlaying != _isPlaying) {
+        if (_isPlaying) {
+          // If we just started playing, start the auto-hide timer
+          _startHideTimer();
+        } else {
+          // If we just paused, make controls visible and cancel hide timer
+          _hideTimer?.cancel();
+          setState(() => _showControls = true);
+        }
+      }
     }
   }
 
   @override
   void dispose() {
+    _hideTimer?.cancel();
     widget.controller.removeListener(_updateState);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () {
-        // Toon of verberg de besturingselementen bij tik
-        setState(() => _showControls = !_showControls);
-        
-        // Start de timer om te verbergen als ze net zichtbaar zijn geworden
-        if (_showControls && _isPlaying) {
-          _startHideTimer();
-        }
-      },
-      behavior: HitTestBehavior.opaque, // Verzeker dat de tap altijd wordt geregistreerd
-      child: AnimatedOpacity(
-        opacity: _showControls ? 1.0 : 0.0,
-        duration: const Duration(milliseconds: 300),
-        child: Container(
-          color: Colors.black26,
-          padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              // Afspeel/pauseer knop
-              IconButton(
-                icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-                color: Colors.white,
-                iconSize: 32,
-                onPressed: () {
-                  _isPlaying ? widget.controller.pause() : widget.controller.play();
-                },
-              ),
-              
-              // Volledig scherm knop
-              IconButton(
-                icon: Icon(widget.isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen),
-                color: Colors.white,
-                iconSize: 32,
-                onPressed: widget.onToggleFullScreen,
-                tooltip: widget.isFullScreen ? 'Verlaat volledig scherm' : 'Volledig scherm',
-              ),
-            ],
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        // Invisible tap detector covering the entire video area
+        Positioned.fill(
+          child: GestureDetector(
+            onTap: _showControlsWithTimer,
+            behavior: HitTestBehavior.opaque,
+            child: const SizedBox.expand(),
           ),
         ),
-      ),
+        
+        // The actual controls that fade in/out
+        Positioned(
+          left: 0,
+          right: 0,
+          bottom: 0,
+          child: AnimatedOpacity(
+            opacity: _showControls ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 300),
+            child: Container(
+              color: Colors.black26,
+              padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  // Afspeel/pauseer knop
+                  IconButton(
+                    icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
+                    color: Colors.white,
+                    iconSize: 32,
+                    onPressed: () {
+                      if (_isPlaying) {
+                        widget.controller.pause();
+                      } else {
+                        widget.controller.play();
+                        _startHideTimer();
+                      }
+                    },
+                  ),
+                  
+                  // Volledig scherm knop
+                  IconButton(
+                    icon: Icon(widget.isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen),
+                    color: Colors.white,
+                    iconSize: 32,
+                    onPressed: () {
+                      widget.onToggleFullScreen();
+                      _showControlsWithTimer();
+                    },
+                    tooltip: widget.isFullScreen ? 'Verlaat volledig scherm' : 'Volledig scherm',
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
