@@ -15,7 +15,6 @@ class NewsArticleScreen extends StatefulWidget {
 
 class _NewsArticleScreenState extends State<NewsArticleScreen> {
   bool _isLoading = true;
-  InAppWebViewController? _webViewController;
 
   @override
   void initState() {
@@ -47,7 +46,7 @@ class _NewsArticleScreenState extends State<NewsArticleScreen> {
           InAppWebView(
             initialUrlRequest: URLRequest(url: WebUri(widget.articleUrl)),
             onWebViewCreated: (controller) {
-              _webViewController = controller;
+              // Removed unused controller assignment
             },
             onLoadStart: (controller, url) async {
               setState(() => _isLoading = true); // Begin met laden

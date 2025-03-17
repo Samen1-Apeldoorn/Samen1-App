@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/rss_service.dart';
 import '../services/notification_service.dart';
 import '../services/log_service.dart';
@@ -50,22 +49,6 @@ class _SettingsPageState extends State<SettingsPage> {
       );
     } else {
       await Workmanager().cancelByUniqueName('samen1-rss-check');
-    }
-  }
-
-  Future<void> _launchEmail() async {
-    final Uri emailLaunchUri = Uri(
-      scheme: 'mailto',
-      path: 'floris.vandenbroek@samen1.nl',
-      query: 'subject=Feedback Samen1 App',
-    );
-
-    if (!await launchUrl(emailLaunchUri)) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Kon email app niet openen')),
-        );
-      }
     }
   }
 
@@ -244,7 +227,7 @@ class _SettingsPageState extends State<SettingsPage> {
                                       _saveSettings();
                                     }
                                   : null,
-                              style: ButtonStyle(
+                              style: const ButtonStyle(
                                 visualDensity: VisualDensity.compact,
                                 tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),

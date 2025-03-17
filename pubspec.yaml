@@ -14,11 +14,7 @@ dependencies:
   flutter_inappwebview: ^6.0.0
   wakelock_plus: ^1.1.4
   package_info_plus: ^5.0.1
-  workmanager:
-    git:
-      url: https://github.com/fluttercommunity/flutter_workmanager.git
-      path: workmanager
-      ref: main
+  workmanager: ^0.5.2
   flutter_local_notifications: ^18.0.1
   shared_preferences: ^2.2.3
   http: ^1.1.2
