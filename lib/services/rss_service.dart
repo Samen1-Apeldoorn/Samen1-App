@@ -2,6 +2,7 @@ import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'notification_service.dart';
+import 'log_service.dart';
 
 class RSSService {
   static const _feedUrl = 'https://samen1.nl/feed/';
@@ -9,15 +10,18 @@ class RSSService {
 
   static Future<String> checkForNewContent() async {
     try {
+      LogService.log('Checking for new RSS content', category: 'rss');
       final prefs = await SharedPreferences.getInstance();
       final lastCheck = prefs.getString(_lastCheckKey) ?? '';
 
       final firstItem = await _fetchLatestItem();
       if (firstItem == null) {
+        LogService.log('Failed to fetch RSS feed', category: 'rss_error');
         return 'Fout bij ophalen feed';
       }
       
       if (firstItem.pubDate != lastCheck) {
+        LogService.log('New content found, sending notification', category: 'rss');
         await NotificationService.showNotification(
           title: 'Samen1 Nieuwsbericht', // Standard title for all notifications
           body: firstItem.title,  // Article title as body
@@ -27,8 +31,11 @@ class RSSService {
         await prefs.setString(_lastCheckKey, firstItem.pubDate);
         return 'Nieuwe melding verzonden: ${firstItem.title}';
       }
+      
+      LogService.log('No new content found', category: 'rss');
       return 'Geen nieuwe artikelen gevonden';
     } catch (e) {
+      LogService.log('Error checking RSS: $e', category: 'rss_error');
       return 'Fout: $e';
     }
   }

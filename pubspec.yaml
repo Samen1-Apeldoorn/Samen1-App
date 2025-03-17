@@ -1,7 +1,8 @@
-name: Samen1
-description: "Samen1 Android APP"
-publish_to: 'none'
-version: 1.0.0+1
+name: samen1 
+description: "De officiële Samen1 app"
+# De versie bestaat uit 3 nummers: major.minor.patch
+# Het build nummer moet bij elke release verhoogd worden
+version: 0.4.2+42  # <versie>+<buildnummer>
 
 environment:
   sdk: '>=3.2.3 <4.0.0'
@@ -19,12 +20,13 @@ dependencies:
       path: workmanager
       ref: main
   flutter_local_notifications: ^18.0.1
-  shared_preferences: ^2.2.2
+  shared_preferences: ^2.2.3
   http: ^1.1.2
   url_launcher: ^6.1.14
   video_player: ^2.7.2
   path_provider: ^2.1.1
   flutter_launcher_icons: ^0.10.0
+  device_info_plus: ^9.1.2
 
 dev_dependencies:
   flutter_test:

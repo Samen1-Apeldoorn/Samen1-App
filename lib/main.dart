@@ -7,13 +7,19 @@ import 'screens/tv_page.dart';
 import 'screens/settings_page.dart';
 import 'services/notification_service.dart';
 import 'services/rss_service.dart';
+import 'services/log_service.dart';
+import 'services/version_service.dart';
 
 // Global navigation key to use for navigation from outside of widgets
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  LogService.log('Application starting', category: 'app_lifecycle');
+  
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  await VersionService.initialize();
+  LogService.log('Version service initialized: ${VersionService.fullVersionString}', category: 'initialization');
 
   // Stel de statusbalkkleur en icoontjes in
   SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
@@ -25,25 +31,30 @@ void main() async {
 
   // Initialize notifications first
   await NotificationService.initialize();
+  LogService.log('Notification service initialized', category: 'initialization');
   
   // Then initialize workmanager
   await Workmanager().initialize(
     callbackDispatcher,
     isInDebugMode: true,
   );
+  LogService.log('Workmanager initialized', category: 'initialization');
   
   runApp(const MyApp());
 }
 
 // Handle deep links from notifications
 void handleDeepLink(String? url) {
+  LogService.log('Attempting to handle deep link', category: 'navigation');
   if (url != null && url.isNotEmpty) {
-    debugPrint('Opening deep link: $url');
+    LogService.log('Deep link URL: $url', category: 'navigation');
     navigatorKey.currentState?.push(
       MaterialPageRoute(
         builder: (context) => NewsArticleScreen(articleUrl: url),
       ),
     );
+  } else {
+    LogService.log('Empty or null deep link URL', category: 'navigation_error');
   }
 }
 
@@ -87,7 +98,14 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  @override
+  void initState() {
+    super.initState();
+    LogService.log('Main screen initialized', category: 'navigation');
+  }
+
   int _currentIndex = 0;
+  final _pageNames = const ['Nieuws', 'Radio', 'TV', 'Instellingen'];
   final _pages = const [
     NewsPage(),
     RadioPage(),
@@ -95,13 +113,25 @@ class _MainScreenState extends State<MainScreen> {
     SettingsPage(),
   ];
 
+  void _onTabChanged(int index) {
+    if (_currentIndex != index) {
+      setState(() {
+        LogService.log(
+          'Navigatie van ${_pageNames[_currentIndex]} naar ${_pageNames[index]}', 
+          category: 'navigation'
+        );
+        _currentIndex = index;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: _pages[_currentIndex],
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: _onTabChanged,
         type: BottomNavigationBarType.fixed,
         backgroundColor: const Color(0xFFFA6401),
         selectedItemColor: Colors.white,

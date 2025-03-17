@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/log_service.dart';
 
 class NewsArticleScreen extends StatefulWidget {
   final String articleUrl;
@@ -15,6 +16,12 @@ class NewsArticleScreen extends StatefulWidget {
 class _NewsArticleScreenState extends State<NewsArticleScreen> {
   bool _isLoading = true;
   InAppWebViewController? _webViewController;
+
+  @override
+  void initState() {
+    super.initState();
+    LogService.log('Opening article: ${widget.articleUrl}', category: 'news');
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,15 +109,15 @@ class _NewsPageState extends State<NewsPage> {
   InAppWebViewController? _webViewController;
 
   @override
+  void initState() {
+    super.initState();
+    LogService.log('News page opened', category: 'news');
+  }
+
+  @override
   Widget build(BuildContext context) {
     return WillPopScope(
-      onWillPop: () async {
-        if (await _webViewController?.canGoBack() ?? false) {
-          _webViewController?.goBack();
-          return false;
-        }
-        return true;
-      },
+      onWillPop: _handleBack,
       child: Scaffold(
         body: Stack(
           children: <Widget>[
@@ -156,6 +163,15 @@ class _NewsPageState extends State<NewsPage> {
         ),
       ),
     );
+  }
+
+  Future<bool> _handleBack() async {
+    if (await _webViewController?.canGoBack() ?? false) {
+      _webViewController?.goBack();
+      LogService.log('Navigating back in WebView', category: 'news');
+      return false;
+    }
+    return true;
   }
 
   // Injecteer de CSS na de pagina is geladen
