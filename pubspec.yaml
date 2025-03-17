@@ -3,7 +3,7 @@ description: "De officiële Samen1 app"
 publish_to: none
 # De versie bestaat uit 3 nummers: major.minor.patch
 # Het build nummer moet bij elke release verhoogd worden
-version: 0.4.2+42  # <versie>+<buildnummer>
+version: 0.4.4+44  # <versie>+<buildnummer>
 
 environment:
   sdk: '>=3.2.3 <4.0.0'
