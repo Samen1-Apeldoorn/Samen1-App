@@ -1,6 +1,6 @@
 # Samen1 App
 
-![Samen1 Logo](https://samen1.nl/bestanden/uploads/samen1-nieuwsimg-1.jpg)
+![Samen1 Logo](https://samen1.nl/bestanden/uploads/Samen1_logo1.png)
 
 ## 📱 Overzicht
 
