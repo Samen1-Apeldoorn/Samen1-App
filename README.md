@@ -1,76 +1,75 @@
 # Samen1 App
 
-Een nieuw Flutter-project.
+![Samen1 Logo](https://samen1.nl/bestanden/uploads/samen1-nieuwsimg-1.jpg)
 
-## Introductie
+## 📱 Overzicht
 
-Samen1 App is een mobiele applicatie ontwikkeld met Flutter. Het biedt gebruikers toegang tot het laatste nieuws, radio en tv-streams van Samen1. De app bevat ook instellingen voor meldingen en andere voorkeuren.
+Samen1 App is een moderne Flutter-applicatie die toegang biedt tot een complete multimedia-ervaring. Met deze app kun je het laatste nieuws lezen, live naar radio luisteren en tv-streams bekijken, allemaal binnen één gebruiksvriendelijke interface.
 
-## Functies
+## ✨ Belangrijkste functies
 
-- **Nieuws**: Blijf op de hoogte van de laatste nieuwsartikelen.
-- **Radio**: Luister naar live radiostreams.
-- **TV**: Bekijk live tv-streams.
-- **Meldingen**: Ontvang meldingen voor nieuwe artikelen en updates.
-- **Instellingen**: Pas je app-ervaring aan met verschillende instellingen.
+- **📰 Nieuws** - Blijf up-to-date met het laatste nieuws en gebeurtenissen
+- **📻 Radio** - Geniet van kristalheldere live radio-uitzendingen
+- **📺 TV** - Bekijk HD live tv-streams waar je ook bent
+- **🔔 Meldingen** - Personaliseer meldingen voor nieuwsartikelen en uitzendingen
+- **⚙️ Instellingen** - Pas de app aan jouw voorkeuren aan
 
-## Aan de slag
+## 🚀 Installatie
 
-Dit project is een startpunt voor een Flutter-applicatie.
+```bash
+# Repository klonen
+git clone https://github.com/yourusername/samen1appv5.git
+cd samen1appv5
 
-Enkele bronnen om je op weg te helpen als dit je eerste Flutter-project is:
+# Afhankelijkheden installeren
+flutter pub get
 
-- [Lab: Schrijf je eerste Flutter-app](https://docs.flutter.dev/get-started/codelab)
-- [Kookboek: Nuttige Flutter-voorbeelden](https://docs.flutter.dev/cookbook)
+# App starten
+flutter run
+```
 
-Voor hulp bij het starten met Flutter-ontwikkeling, bekijk de
-[online documentatie](https://docs.flutter.dev/), die tutorials,
-voorbeelden, begeleiding bij mobiele ontwikkeling en een volledige API-referentie biedt.
+## 🛠️ Vereisten
 
-## Installatie
+- Flutter SDK (laatste versie)
+- Dart SDK (laatste versie)
+- Android Studio / Xcode voor respectievelijk Android / iOS ontwikkeling
 
-Om aan de slag te gaan met de Samen1 App, volg je deze stappen:
+## 📋 Handleiding
 
-1. **Kloon de repository**:
-   ```sh
-   git clone https://github.com/yourusername/samen1appv5.git
-   cd samen1appv5
-   ```
+De app is intuïtief ontworpen met een eenvoudige navigatie:
 
-2. **Installeer afhankelijkheden**:
-   ```sh
-   flutter pub get
-   ```
+1. **Nieuws** - Blader door de nieuwsfeed en tik op artikelen om ze volledig te lezen
+2. **Radio** - Start de stream met één tik en geniet van live audio
+3. **TV** - Bekijk live tv in portret- of landschapsmodus
+4. **Instellingen** - Pas meldingsvoorkeuren aan, wijzig thema's en meer
 
-3. **Start de app**:
-   ```sh
-   flutter run
-   ```
+## 👥 Bijdragen
 
-## Gebruik
+We verwelkomen bijdragen van de community! Zo kun je meedoen:
 
-Zodra de app draait, kun je door de verschillende secties navigeren met behulp van de onderste navigatiebalk:
+1. Fork de repository
+2. Maak een feature branch (`git checkout -b feature/AmazingFeature`)
+3. Commit je wijzigingen (`git commit -m 'Add some AmazingFeature'`)
+4. Push naar de branch (`git push origin feature/AmazingFeature`)
+5. Open een Pull Request
 
-- **Nieuws**: Bekijk de laatste nieuwsartikelen.
-- **Radio**: Luister naar de live radiostream.
-- **TV**: Bekijk de live tv-stream.
-- **Instellingen**: Toegang tot en wijziging van app-instellingen.
+## 📝 Code van gedrag
 
-## Bijdragen
+Samen1 streeft naar een inclusieve en respectvolle gemeenschap. We verwachten dat alle bijdragers:
+- Respectvol communiceren
+- Constructieve feedback geven
+- Focus houden op wat het beste is voor de community
 
-Als je wilt bijdragen aan het project, volg dan deze stappen:
+## 📄 Licentie
 
-1. Fork de repository.
-2. Maak een nieuwe branch (`git checkout -b feature-branch`).
-3. Maak je wijzigingen.
-4. Commit je wijzigingen (`git commit -m 'Voeg een functie toe'`).
-5. Push naar de branch (`git push origin feature-branch`).
-6. Open een pull request.
+Dit project is gelicentieerd onder de MIT-licentie - zie het [LICENSE](LICENSE) bestand voor details.
 
-## Licentie
+## 📞 Contact
 
-Dit project is gelicentieerd onder de MIT-licentie. Zie het [LICENSE](LICENSE) bestand voor meer informatie.
+Floris van den Broek - [floris.vandenbroek@samen1.nl](mailto:floris.vandenbroek@samen1.nl)
 
-## Contact
+Project Link: [https://github.com/yourusername/samen1appv5](https://github.com/yourusername/samen1appv5)
 
-Voor vragen of feedback, neem contact met ons op via [floris.vandenbroek@samen1.nl](mailto:floris.vandenbroek@samen1.nl).
+---
+
+Ontwikkeld met ❤️ door het Samen1 Team
