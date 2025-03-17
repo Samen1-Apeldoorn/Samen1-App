@@ -51,12 +51,15 @@ class _NewsArticleScreenState extends State<NewsArticleScreen> {
               setState(() => _isLoading = false); // Stop het laden
             },
             shouldOverrideUrlLoading: (controller, navigation) async {
-              final url = navigation.request.url.toString();
-              if (!url.contains('samen1.nl')) {
-                launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                return NavigationActionPolicy.CANCEL;
+              final url = navigation.request.url.toString().toLowerCase();
+              // Alleen exacte samen1.nl URLs toestaan
+              if (url.startsWith('https://samen1.nl/') || 
+                  url.startsWith('http://samen1.nl/')) {
+                return NavigationActionPolicy.ALLOW;
               }
-              return NavigationActionPolicy.ALLOW;
+              // Alle andere URLs extern openen
+              await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+              return NavigationActionPolicy.CANCEL;
             },
           ),
           if (_isLoading)
@@ -135,12 +138,15 @@ class _NewsPageState extends State<NewsPage> {
                   await _injectCSS(controller, url.toString());
                 },
                 shouldOverrideUrlLoading: (controller, navigation) async {
-                  final url = navigation.request.url.toString();
-                  if (!url.contains('samen1.nl')) {
-                    launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                    return NavigationActionPolicy.CANCEL;
+                  final url = navigation.request.url.toString().toLowerCase();
+                  // Alleen exacte samen1.nl URLs toestaan
+                  if (url.startsWith('https://samen1.nl/') || 
+                      url.startsWith('http://samen1.nl/')) {
+                    return NavigationActionPolicy.ALLOW;
                   }
-                  return NavigationActionPolicy.ALLOW;
+                  // Alle andere URLs extern openen
+                  await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                  return NavigationActionPolicy.CANCEL;
                 },
               ),
             ),
