@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_inappwebview/flutter_inappwebview.dart';
-import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../services/log_service.dart';
 
@@ -24,13 +23,6 @@ class _NewsArticleScreenState extends State<NewsArticleScreen> {
 
   @override
   Widget build(BuildContext context) {
-    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
-      statusBarColor: Colors.transparent, 
-      statusBarIconBrightness: Brightness.dark,
-      systemNavigationBarColor: Colors.white,
-      systemNavigationBarIconBrightness: Brightness.dark,
-    ));
-
     return Scaffold(
       appBar: AppBar(
         title: const Text('Samen1 Nieuws'),
@@ -45,28 +37,15 @@ class _NewsArticleScreenState extends State<NewsArticleScreen> {
         children: <Widget>[
           InAppWebView(
             initialUrlRequest: URLRequest(url: WebUri(widget.articleUrl)),
-            onWebViewCreated: (controller) {
-              // Removed unused controller assignment
-            },
             onLoadStart: (controller, url) async {
-              setState(() => _isLoading = true); // Begin met laden
-               await _injectCSS(controller, url.toString());
+              setState(() => _isLoading = true);
+              await _injectStyleSheet(controller, url.toString());
             },
             onLoadStop: (controller, url) async {
-              // Injecteer de CSS na het laden
-              setState(() => _isLoading = false); // Stop het laden
+              await _injectStyleSheet(controller, url.toString());
+              setState(() => _isLoading = false);
             },
-            shouldOverrideUrlLoading: (controller, navigation) async {
-              final url = navigation.request.url.toString().toLowerCase();
-              // Alleen exacte samen1.nl URLs toestaan
-              if (url.startsWith('https://samen1.nl/') || 
-                  url.startsWith('http://samen1.nl/')) {
-                return NavigationActionPolicy.ALLOW;
-              }
-              // Alle andere URLs extern openen
-              await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-              return NavigationActionPolicy.CANCEL;
-            },
+            shouldOverrideUrlLoading: _handleExternalLinks,
           ),
           if (_isLoading)
             const Center(child: CircularProgressIndicator()),
@@ -75,23 +54,40 @@ class _NewsArticleScreenState extends State<NewsArticleScreen> {
     );
   }
 
-  // Injecteer de CSS na de pagina is geladen
-  Future<void> _injectCSS(InAppWebViewController controller, String url) async {
-    String cssCode;
-    if (url == 'https://samen1.nl/nieuws/') {
-      cssCode = '''
-        footer, .site-header, .site-footer, #mobilebar, .page-title { display: none !important; }
-        body { padding-top: 0 !important; }
-        #top { padding-top: 1rem; }
-      ''';
-    } else {
-      cssCode = '''
+  Future<NavigationActionPolicy> _handleExternalLinks(
+      InAppWebViewController controller, NavigationAction navigation) async {
+    final url = navigation.request.url.toString().toLowerCase();
+    
+    // Only allow samen1.nl URLs to navigate within the WebView
+    if (url.startsWith('https://samen1.nl/') || url.startsWith('http://samen1.nl/')) {
+      LogService.log('Internal navigation: $url', category: 'news');
+      return NavigationActionPolicy.ALLOW;
+    }
+    
+    // Launch external URLs in browser
+    try {
+      LogService.log('Launching external URL: $url', category: 'news');
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (e) {
+      LogService.log('Error launching URL $url: $e', category: 'news_error');
+    }
+    return NavigationActionPolicy.CANCEL;
+  }
+
+  Future<void> _injectStyleSheet(InAppWebViewController controller, String url) async {
+    try {
+      final cssCode = '''
         footer, .site-header, .site-footer, #mobilebar { display: none !important; }
         body { padding-top: 0 !important; }
         #top { padding-top: 1rem; }
+        ${url == 'https://samen1.nl/nieuws/' ? '.page-title { display: none !important; }' : ''}
       ''';
+      
+      await controller.injectCSSCode(source: cssCode);
+      LogService.log('CSS injected for article page', category: 'news');
+    } catch (e) {
+      LogService.log('Error injecting CSS: $e', category: 'news_error');
     }
-    await controller.injectCSSCode(source: cssCode);
   }
 }
 
@@ -106,6 +102,7 @@ class _NewsPageState extends State<NewsPage> {
   bool _isLoading = true;
   bool _isWebViewVisible = false;
   InAppWebViewController? _webViewController;
+  static const String _newsUrl = 'https://samen1.nl/nieuws/';
 
   @override
   void initState() {
@@ -124,36 +121,29 @@ class _NewsPageState extends State<NewsPage> {
               opacity: _isWebViewVisible ? 1.0 : 0.0,
               duration: const Duration(milliseconds: 500),
               child: InAppWebView(
-                initialUrlRequest: URLRequest(url: WebUri('https://samen1.nl/nieuws/')),
+                initialUrlRequest: URLRequest(url: WebUri(_newsUrl)),
                 onWebViewCreated: (controller) {
                   _webViewController = controller;
+                  LogService.log('News WebView created', category: 'news');
                 },
                 onLoadStart: (controller, url) async {
+                  LogService.log('Loading news content: ${url.toString()}', category: 'news');
                   setState(() {
                     _isLoading = true;
-                    _isWebViewVisible = false; // Verberg de WebView tijdens het laden
+                    _isWebViewVisible = false;
                   });
-                  await _injectCSS(controller, url.toString());
+                  await _injectStyleSheet(controller, url.toString());
                 },
                 onLoadStop: (controller, url) async {
-                  // Injecteer de CSS na het laden
+                  await _injectStyleSheet(controller, url.toString());
+                  LogService.log('News content loaded', category: 'news');
+                  
                   setState(() {
                     _isLoading = false;
-                    _isWebViewVisible = true; // Maak de WebView zichtbaar
+                    _isWebViewVisible = true;
                   });
-                  await _injectCSS(controller, url.toString());
                 },
-                shouldOverrideUrlLoading: (controller, navigation) async {
-                  final url = navigation.request.url.toString().toLowerCase();
-                  // Alleen exacte samen1.nl URLs toestaan
-                  if (url.startsWith('https://samen1.nl/') || 
-                      url.startsWith('http://samen1.nl/')) {
-                    return NavigationActionPolicy.ALLOW;
-                  }
-                  // Alle andere URLs extern openen
-                  await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                  return NavigationActionPolicy.CANCEL;
-                },
+                shouldOverrideUrlLoading: _handleExternalLinks,
               ),
             ),
             if (_isLoading)
@@ -167,28 +157,45 @@ class _NewsPageState extends State<NewsPage> {
   Future<bool> _handleBack() async {
     if (await _webViewController?.canGoBack() ?? false) {
       _webViewController?.goBack();
-      LogService.log('Navigating back in WebView', category: 'news');
+      LogService.log('Navigating back in news WebView', category: 'news');
       return false;
     }
     return true;
   }
+  
+  Future<NavigationActionPolicy> _handleExternalLinks(
+      InAppWebViewController controller, NavigationAction navigation) async {
+    final url = navigation.request.url.toString().toLowerCase();
+    
+    // Only allow samen1.nl URLs
+    if (url.startsWith('https://samen1.nl/') || url.startsWith('http://samen1.nl/')) {
+      LogService.log('Internal navigation: $url', category: 'news');
+      return NavigationActionPolicy.ALLOW;
+    }
+    
+    // Launch external URLs in browser
+    try {
+      LogService.log('Launching external URL: $url', category: 'news');
+      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+    } catch (e) {
+      LogService.log('Error launching URL $url: $e', category: 'news_error');
+    }
+    return NavigationActionPolicy.CANCEL;
+  }
 
-  // Injecteer de CSS na de pagina is geladen
-  Future<void> _injectCSS(InAppWebViewController controller, String url) async {
-    String cssCode;
-    if (url == 'https://samen1.nl/nieuws/') {
-      cssCode = '''
-        footer, .site-header, .site-footer, #mobilebar, .page-title { display: none !important; }
-        body { padding-top: 0 !important; }
-        #top { padding-top: 1rem; }
-      ''';
-    } else {
-      cssCode = '''
+  Future<void> _injectStyleSheet(InAppWebViewController controller, String url) async {
+    try {
+      final cssCode = '''
         footer, .site-header, .site-footer, #mobilebar { display: none !important; }
         body { padding-top: 0 !important; }
         #top { padding-top: 1rem; }
+        ${url == _newsUrl ? '.page-title { display: none !important; }' : ''}
       ''';
+      
+      await controller.injectCSSCode(source: cssCode);
+      LogService.log('CSS injected for news page', category: 'news');
+    } catch (e) {
+      LogService.log('Error injecting CSS: $e', category: 'news_error');
     }
-    await controller.injectCSSCode(source: cssCode);
   }
 }

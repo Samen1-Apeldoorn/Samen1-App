@@ -1,10 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
-import 'dart:async'; // Add for better async handling
+import 'dart:async';
+import '../services/log_service.dart';
 
-/// Scherm voor het afspelen van de Samen1 TV livestream.
-/// Deze pagina gebruikt een native video player om de HLS stream af te spelen.
 class TVPage extends StatefulWidget {
   const TVPage({super.key});
 
@@ -13,27 +12,26 @@ class TVPage extends StatefulWidget {
 }
 
 class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
-  // Controller voor de video player
   late VideoPlayerController _controller;
   
-  // Status variabelen
+  // Status variables
   bool _isError = false;
   bool _isLoading = true;
-  final bool _showDebugInfo = false;
   bool _isFullScreen = false;
   bool _isExitingFullScreen = false;
   Timer? _initRetryTimer;
   int _retryCount = 0;
   static const int _maxRetryCount = 3;
   
-  // De constante URL naar de HLS stream
+  // HLS stream URL
   static const String _hlsStreamUrl = 
       'https://server-67.stream-server.nl:1936/Samen1TV/Samen1TV/playlist.m3u8';
 
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this); // Add lifecycle observer
+    WidgetsBinding.instance.addObserver(this);
+    LogService.log('TV Page initialized', category: 'tv');
     
     // Delay initialization slightly to improve UI responsiveness
     Future.delayed(const Duration(milliseconds: 200), () {
@@ -43,21 +41,20 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    // Optimize resource usage when app goes to background
     if (state == AppLifecycleState.paused) {
       _controller.pause();
+      LogService.log('TV stream paused due to app lifecycle change', category: 'tv');
     } else if (state == AppLifecycleState.resumed) {
-      // Check if player is in good state before resuming
       if (_controller.value.isInitialized && !_isError) {
         _controller.play();
+        LogService.log('TV stream resumed', category: 'tv');
       } else {
-        // Reinitialize if needed
         _disposeAndRecreatePlayer();
+        LogService.log('TV stream recreated after resume', category: 'tv');
       }
     }
   }
 
-  /// Initialiseert de video player met de HLS stream
   Future<void> _initializeVideoPlayer() async {
     if (!mounted) return;
     
@@ -66,11 +63,10 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
       _isError = false;
     });
 
-    // Cancel any pending retry timer
     _initRetryTimer?.cancel();
+    LogService.log('Initializing TV stream player', category: 'tv');
 
     try {
-      // Maak een nieuwe video controller met de HLS stream URL
       _controller = VideoPlayerController.networkUrl(
         Uri.parse(_hlsStreamUrl),
         httpHeaders: {
@@ -84,7 +80,6 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
         ),
       );
       
-      // Use a timeout to avoid hanging initialization
       await _controller.initialize().timeout(
         const Duration(seconds: 15),
         onTimeout: () {
@@ -92,34 +87,32 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
         },
       );
       
-      // Only proceed if still mounted after async operation
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _retryCount = 0; // Reset retry count on success
+          _retryCount = 0;
         });
         
         _controller.addListener(_onVideoStatusChanged);
         _controller.setLooping(true);
         await _controller.play();
+        LogService.log('TV stream player initialized successfully', category: 'tv');
       }
     } catch (error) {
+      LogService.log('Error initializing TV stream: $error', category: 'tv_error');
       if (mounted) {
-        // If there's an initialization error, try to recover
         _handleInitializationError();
       }
     }
   }
   
   void _handleInitializationError() {
-    // Clean up the failed controller
     if (_controller.value.isInitialized) {
       _controller.removeListener(_onVideoStatusChanged);
       _controller.dispose();
     }
 
     if (_retryCount < _maxRetryCount) {
-      // Incremental backoff for retries
       final retryDelay = Duration(seconds: (_retryCount + 1) * 2);
       _retryCount++;
       
@@ -128,42 +121,37 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
         _isError = false;
       });
       
-      // Retry initialization after delay
+      LogService.log('Retrying TV stream initialization (attempt $_retryCount)', category: 'tv');
       _initRetryTimer = Timer(retryDelay, _initializeVideoPlayer);
     } else {
-      // After max retries, show error state
       setState(() {
         _isError = true;
         _isLoading = false;
       });
+      LogService.log('Max retry attempts reached for TV stream', category: 'tv_error');
     }
   }
   
   void _onVideoStatusChanged() {
-    // Handle error state changes
     final hasError = _controller.value.hasError;
     
     if (hasError && mounted && !_isError) {
+      LogService.log('Video player reported error', category: 'tv_error');
       setState(() => _isError = true);
     }
     
-    // Handle video size changes for better layout
     if (_controller.value.isInitialized && mounted) {
-      // Force rebuild if video size changed significantly
       setState(() {});
     }
   }
   
-  // Clean method to dispose and recreate player
   void _disposeAndRecreatePlayer() {
     _controller.removeListener(_onVideoStatusChanged);
     _controller.dispose();
     _initializeVideoPlayer();
   }
 
-  /// Schakelt tussen normaal en volledig scherm
   void _toggleFullScreen() async {
-    // Als we al bezig zijn met de transitie, doe niets
     if (_isExitingFullScreen) return;
     
     final wasFullScreen = _isFullScreen;
@@ -172,35 +160,31 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
       _isFullScreen = !_isFullScreen;
       
       if (_isFullScreen) {
-        // Volledig scherm (landschap) modus
+        LogService.log('Entering fullscreen mode', category: 'tv');
         SystemChrome.setEnabledSystemUIMode(
           SystemUiMode.immersiveSticky,
-          overlays: [], // Verberg alle overlays
+          overlays: [],
         );
         SystemChrome.setPreferredOrientations([
           DeviceOrientation.landscapeLeft,
           DeviceOrientation.landscapeRight,
         ]);
       } else {
-        // Exit fullscreen - markeer dat we bezig zijn met de transitie
         _isExitingFullScreen = true;
+        LogService.log('Exiting fullscreen mode', category: 'tv');
         
-        // Reset UI overlays
         SystemChrome.setEnabledSystemUIMode(
           SystemUiMode.manual,
-          overlays: SystemUiOverlay.values, // Toon alle overlays weer
+          overlays: SystemUiOverlay.values,
         );
         
-        // Zet oriëntatie terug naar portrait
         SystemChrome.setPreferredOrientations([
           DeviceOrientation.portraitUp,
         ]);
       }
     });
     
-    // Als we uit fullscreen gaan, wacht tot de oriëntatie is bijgewerkt
     if (wasFullScreen) {
-      // Wacht even om de overgang te laten voltooien
       await Future.delayed(const Duration(milliseconds: 500));
       
       if (mounted) {
@@ -213,7 +197,6 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
 
   @override
   void dispose() {
-    // Clean up resources
     _initRetryTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     
@@ -222,19 +205,18 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
       _controller.dispose();
     }
     
-    // Reset orientation preferences when exiting
     SystemChrome.setPreferredOrientations([]);
     SystemChrome.setEnabledSystemUIMode(
       SystemUiMode.manual,
       overlays: SystemUiOverlay.values,
     );
     
+    LogService.log('TV Page disposed', category: 'tv');
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    // Optimize UI overlay setting - only set once per build
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,
@@ -242,7 +224,6 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
       systemNavigationBarIconBrightness: Brightness.dark,
     ));
     
-    // Return optimized fullscreen or normal layout
     return _isFullScreen 
         ? _buildFullscreenLayout()
         : _buildNormalLayout();
@@ -268,7 +249,6 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
     return Scaffold(
       body: OrientationBuilder(
         builder: (context, orientation) {
-          // Only respond to orientation if not in transition
           if (orientation == Orientation.landscape && 
               !_isFullScreen && 
               !_isExitingFullScreen) {
@@ -279,7 +259,6 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
             });
           }
           
-          // Simplified layout with error boundary
           return Center(
             child: AspectRatio(
               aspectRatio: 16 / 9,
@@ -291,16 +270,9 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
     );
   }
 
-  /// Bouwt een volledig-scherm-vullende videoplayer
   Widget _buildFullScreenPlayer() {
-    if (!_controller.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
-    }
-    
-    // More efficient widget structure
     return Stack(
       children: [
-        // Optimized video display
         Center(
           child: _controller.value.isInitialized
               ? AspectRatio(
@@ -310,34 +282,16 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
               : const SizedBox.shrink(),
         ),
         
-        // Video controls
         _VideoControls(
           controller: _controller,
           onToggleFullScreen: _toggleFullScreen,
           isFullScreen: true,
         ),
-        
-        // Debug overlay
-        if (_showDebugInfo)
-          Positioned(
-            top: 8,
-            right: 8,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              color: Colors.black54,
-              child: const Text(
-                'HLS Stream (Fullscreen)',
-                style: TextStyle(color: Colors.white, fontSize: 10),
-              ),
-            ),
-          ),
       ],
     );
   }
 
-  /// Bouwt de juiste widget op basis van de huidige status (fout, laden, afspelen)
   Widget _buildVideoContent() {
-    // Toon foutmelding als er een fout is opgetreden
     if (_isError) {
       return Center(
         child: Column(
@@ -349,11 +303,7 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
             ),
             const SizedBox(height: 12),
             ElevatedButton(
-              onPressed: () {
-                // Probeer opnieuw te laden
-                _controller.dispose();
-                _initializeVideoPlayer();
-              },
+              onPressed: () => _disposeAndRecreatePlayer(),
               child: const Text('Probeer opnieuw'),
             ),
           ],
@@ -361,9 +311,8 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
       );
     }
     
-    // Toon laad-indicator tijdens het initialiseren
     if (_isLoading) {
-      return const Center( // Added const keyword here
+      return const Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
@@ -375,50 +324,29 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
       );
     }
     
-    // Toon de video player als deze is geïnitialiseerd
     if (_controller.value.isInitialized) {
       return _buildVideoPlayer();
     }
     
-    // Fallback - zou niet moeten gebeuren
     return const Center(child: CircularProgressIndicator());
   }
   
-  /// Bouwt de normale video player widget met besturingselementen
   Widget _buildVideoPlayer() {
     return Stack(
       alignment: Alignment.bottomCenter,
       children: [
-        // De video player zelf
         VideoPlayer(_controller),
         
-        // Video controls (afspelen/pauzeren en volledig scherm)
         _VideoControls(
           controller: _controller,
           onToggleFullScreen: _toggleFullScreen,
           isFullScreen: _isFullScreen,
         ),
-        
-        // Debug overlay (indien ingeschakeld)
-        if (_showDebugInfo)
-          Positioned(
-            top: 8,
-            right: 8,
-            child: Container(
-              padding: const EdgeInsets.all(4),
-              color: Colors.black54,
-              child: const Text(
-                'HLS Stream',
-                style: TextStyle(color: Colors.white, fontSize: 10),
-              ),
-            ),
-          ),
       ],
     );
   }
 }
 
-/// Widget voor de video besturingselementen (afspelen/pauzeren en volledig scherm)
 class _VideoControls extends StatefulWidget {
   final VideoPlayerController controller;
   final VoidCallback onToggleFullScreen;
@@ -435,7 +363,6 @@ class _VideoControls extends StatefulWidget {
 }
 
 class _VideoControlsState extends State<_VideoControls> {
-  // Bepaalt of de besturingselementen zichtbaar zijn
   bool _showControls = true;
   late bool _isPlaying;
   Timer? _hideTimer;
@@ -444,20 +371,12 @@ class _VideoControlsState extends State<_VideoControls> {
   void initState() {
     super.initState();
     _isPlaying = widget.controller.value.isPlaying;
-    
-    // Luister naar status veranderingen van de controller
     widget.controller.addListener(_updateState);
-    
-    // Verberg de besturingselementen automatisch na 3 seconden
     _startHideTimer();
   }
 
-  /// Start een timer om de besturingselementen na 3 seconden te verbergen
   void _startHideTimer() {
-    // Cancel any existing timer first
     _hideTimer?.cancel();
-    
-    // Set a new timer
     _hideTimer = Timer(const Duration(seconds: 3), () {
       if (mounted && _isPlaying) {
         setState(() => _showControls = false);
@@ -465,7 +384,6 @@ class _VideoControlsState extends State<_VideoControls> {
     });
   }
   
-  /// Explicitly show the controls and restart the hide timer
   void _showControlsWithTimer() {
     if (mounted) {
       setState(() => _showControls = true);
@@ -473,19 +391,15 @@ class _VideoControlsState extends State<_VideoControls> {
     }
   }
 
-  /// Update de lokale status wanneer de controller verandert
   void _updateState() {
     if (mounted) {
       final wasPlaying = _isPlaying;
       _isPlaying = widget.controller.value.isPlaying;
       
-      // If playback state changed, update the controls visibility
       if (wasPlaying != _isPlaying) {
         if (_isPlaying) {
-          // If we just started playing, start the auto-hide timer
           _startHideTimer();
         } else {
-          // If we just paused, make controls visible and cancel hide timer
           _hideTimer?.cancel();
           setState(() => _showControls = true);
         }
@@ -505,7 +419,6 @@ class _VideoControlsState extends State<_VideoControls> {
     return Stack(
       fit: StackFit.expand,
       children: [
-        // Invisible tap detector covering the entire video area
         Positioned.fill(
           child: GestureDetector(
             onTap: _showControlsWithTimer,
@@ -514,7 +427,6 @@ class _VideoControlsState extends State<_VideoControls> {
           ),
         ),
         
-        // The actual controls that fade in/out
         Positioned(
           left: 0,
           right: 0,
@@ -528,7 +440,6 @@ class _VideoControlsState extends State<_VideoControls> {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  // Afspeel/pauseer knop
                   IconButton(
                     icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
                     color: Colors.white,
@@ -543,7 +454,6 @@ class _VideoControlsState extends State<_VideoControls> {
                     },
                   ),
                   
-                  // Volledig scherm knop
                   IconButton(
                     icon: Icon(widget.isFullScreen ? Icons.fullscreen_exit : Icons.fullscreen),
                     color: Colors.white,

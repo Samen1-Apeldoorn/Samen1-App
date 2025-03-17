@@ -35,8 +35,11 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _saveSettings() async {
-    LogService.log('Saving settings - Notifications: $_notificationsEnabled, Interval: $_checkInterval', 
-        category: 'settings');
+    LogService.log(
+      'Saving settings - Notifications: $_notificationsEnabled, Interval: $_checkInterval', 
+      category: 'settings'
+    );
+    
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notifications_enabled', _notificationsEnabled);
     await prefs.setString('check_interval', _checkInterval);
@@ -47,13 +50,28 @@ class _SettingsPageState extends State<SettingsPage> {
         'checkRSSFeed',
         frequency: Duration(minutes: int.parse(_checkInterval)),
       );
+      LogService.log('Background task registered with interval: $_checkInterval minutes', category: 'settings');
     } else {
       await Workmanager().cancelByUniqueName('samen1-rss-check');
+      LogService.log('Background task cancelled', category: 'settings');
+    }
+  }
+
+  Future<void> _sendTestNotification() async {
+    LogService.log('Test notification requested', category: 'settings');
+    await NotificationService.initialize();
+    final result = await RSSService.sendTestNotification();
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(result)),
+      );
     }
   }
 
   Future<void> _openBatterySettings() async {
-    if (context.mounted) {
+    LogService.log('Battery optimization help requested', category: 'settings');
+    if (mounted) {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
@@ -77,10 +95,13 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Future<void> _showBugReportDialog() async {
+    LogService.log('Bug report dialog opened', category: 'settings');
     final TextEditingController descriptionController = TextEditingController();
     final TextEditingController emailController = TextEditingController();
     
-    return showDialog(
+    if (!mounted) return;
+    
+    showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Bug rapporteren'),
@@ -114,59 +135,68 @@ class _SettingsPageState extends State<SettingsPage> {
             child: const Text('Annuleren'),
           ),
           ElevatedButton(
-            onPressed: () async {
-              if (descriptionController.text.isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Geef een beschrijving van het probleem')),
-                );
-                return;
-              }
-              
-              // Sluit eerst de bug report dialog
-              Navigator.pop(context);
-              
-              // Voeg email toe aan de beschrijving als deze is ingevuld
-              String description = descriptionController.text;
-              if (emailController.text.isNotEmpty) {
-                description = 'Email: ${emailController.text}\n\n$description';
-              }
-              
-              // Toon loading indicator
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Bug report versturen...'),
-                    duration: Duration(milliseconds: 1500),
-                  ),
-                );
-              }
-              
-              final report = await LogService.generateReport(description);
-              final success = await DiscordService.sendBugReport(report);
-              
-              // Toon resultaat snackbar
-              if (context.mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(
-                    content: Text(
-                      success 
-                        ? 'Bedankt voor je melding! We gaan er mee aan de slag.' 
-                        : 'Er ging iets mis bij het versturen. Probeer het later opnieuw.'
-                    ),
-                    duration: const Duration(seconds: 4),
-                    action: success ? null : SnackBarAction(
-                      label: 'Opnieuw',
-                      onPressed: () => _showBugReportDialog(),
-                    ),
-                  ),
-                );
-              }
-            },
+            onPressed: () => _submitBugReport(
+              context,
+              descriptionController.text,
+              emailController.text,
+            ),
             child: const Text('Versturen'),
           ),
         ],
       ),
     );
+  }
+  
+  Future<void> _submitBugReport(BuildContext context, String description, String email) async {
+    if (description.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Geef een beschrijving van het probleem')),
+      );
+      return;
+    }
+    
+    Navigator.pop(context);
+    
+    String reportText = description;
+    if (email.isNotEmpty) {
+      reportText = 'Email: $email\n\n$description';
+    }
+    
+    LogService.log('Submitting bug report', category: 'settings');
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Bug report versturen...'),
+          duration: Duration(milliseconds: 1500),
+        ),
+      );
+    }
+    
+    final report = await LogService.generateReport(reportText);
+    final success = await DiscordService.sendBugReport(report);
+    
+    LogService.log(
+      success ? 'Bug report sent successfully' : 'Bug report failed to send',
+      category: 'settings'
+    );
+    
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            success 
+              ? 'Bedankt voor je melding! We gaan er mee aan de slag.' 
+              : 'Er ging iets mis bij het versturen. Probeer het later opnieuw.'
+          ),
+          duration: const Duration(seconds: 4),
+          action: success ? null : SnackBarAction(
+            label: 'Opnieuw',
+            onPressed: _showBugReportDialog,
+          ),
+        ),
+      );
+    }
   }
 
   @override
@@ -184,92 +214,9 @@ class _SettingsPageState extends State<SettingsPage> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                ExpansionTile(
-                  title: Text(
-                    'Meldingen',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                  initiallyExpanded: true,
-                  shape: const Border(),
-                  collapsedShape: const Border(),
-                  children: [
-                    SwitchListTile(
-                      title: const Text('Meldingen inschakelen'),
-                      subtitle: const Text('Ontvang meldingen bij nieuwe artikelen'),
-                      value: _notificationsEnabled,
-                      onChanged: (value) {
-                        setState(() => _notificationsEnabled = value);
-                        _saveSettings();
-                      },
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Controle interval'),
-                          const SizedBox(height: 8),
-                          SizedBox(
-                            width: double.infinity,
-                            child: SegmentedButton<String>(
-                              segments: const [
-                                ButtonSegment(value: '10', label: Text('10m')),
-                                ButtonSegment(value: '30', label: Text('30m')),
-                                ButtonSegment(value: '60', label: Text('1u')),
-                                ButtonSegment(value: '240', label: Text('4u')),
-                              ],
-                              selected: {_checkInterval},
-                              onSelectionChanged: _notificationsEnabled
-                                  ? (Set<String> newSelection) {
-                                      setState(() => _checkInterval = newSelection.first);
-                                      _saveSettings();
-                                    }
-                                  : null,
-                              style: const ButtonStyle(
-                                visualDensity: VisualDensity.compact,
-                                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    ListTile(
-                      title: const Text('Test melding'),
-                      subtitle: const Text('Stuur een test melding om te controleren'),
-                      trailing: IconButton(
-                        icon: const Icon(Icons.notifications_active),
-                        onPressed: () async {
-                          await NotificationService.initialize();
-                          final result = await RSSService.sendTestNotification();
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(result)),
-                            );
-                          }
-                        },
-                      ),
-                    ),
-                    if (Theme.of(context).platform == TargetPlatform.android)
-                      ListTile(
-                        title: const Text('Batterij optimalisatie'),
-                        subtitle: const Text('Schakel batterij optimalisatie uit voor betrouwbare meldingen'),
-                        trailing: IconButton(
-                          icon: const Icon(Icons.battery_saver),
-                          onPressed: _openBatterySettings,
-                        ),
-                      ),
-                  ],
-                ),
+                _buildNotificationSettings(),
                 const Divider(),
-                ListTile(
-                  leading: const Icon(Icons.bug_report),
-                  title: const Text('Bug rapporteren'),
-                  subtitle: const Text('Stuur een probleem rapport'),
-                  onTap: _showBugReportDialog,
-                ),
+                _buildBugReportTile(),
                 const SizedBox(height: 32),
                 Center(
                   child: Text(
@@ -285,6 +232,89 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildNotificationSettings() {
+    return ExpansionTile(
+      title: Text(
+        'Meldingen',
+        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+              fontWeight: FontWeight.bold,
+            ),
+      ),
+      initiallyExpanded: true,
+      shape: const Border(),
+      collapsedShape: const Border(),
+      children: [
+        SwitchListTile(
+          title: const Text('Meldingen inschakelen'),
+          subtitle: const Text('Ontvang meldingen bij nieuwe artikelen'),
+          value: _notificationsEnabled,
+          onChanged: (value) {
+            setState(() => _notificationsEnabled = value);
+            _saveSettings();
+          },
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Controle interval'),
+              const SizedBox(height: 8),
+              SizedBox(
+                width: double.infinity,
+                child: SegmentedButton<String>(
+                  segments: const [
+                    ButtonSegment(value: '10', label: Text('10m')),
+                    ButtonSegment(value: '30', label: Text('30m')),
+                    ButtonSegment(value: '60', label: Text('1u')),
+                    ButtonSegment(value: '240', label: Text('4u')),
+                  ],
+                  selected: {_checkInterval},
+                  onSelectionChanged: _notificationsEnabled
+                      ? (Set<String> newSelection) {
+                          setState(() => _checkInterval = newSelection.first);
+                          _saveSettings();
+                        }
+                      : null,
+                  style: const ButtonStyle(
+                    visualDensity: VisualDensity.compact,
+                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        ListTile(
+          title: const Text('Test melding'),
+          subtitle: const Text('Stuur een test melding om te controleren'),
+          trailing: IconButton(
+            icon: const Icon(Icons.notifications_active),
+            onPressed: _sendTestNotification,
+          ),
+        ),
+        if (Theme.of(context).platform == TargetPlatform.android)
+          ListTile(
+            title: const Text('Batterij optimalisatie'),
+            subtitle: const Text('Schakel batterij optimalisatie uit voor betrouwbare meldingen'),
+            trailing: IconButton(
+              icon: const Icon(Icons.battery_saver),
+              onPressed: _openBatterySettings,
+            ),
+          ),
+      ],
+    );
+  }
+
+  Widget _buildBugReportTile() {
+    return ListTile(
+      leading: const Icon(Icons.bug_report),
+      title: const Text('Bug rapporteren'),
+      subtitle: const Text('Stuur een probleem rapport'),
+      onTap: _showBugReportDialog,
     );
   }
 }

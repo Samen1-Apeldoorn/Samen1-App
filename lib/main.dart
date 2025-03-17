@@ -33,12 +33,16 @@ void main() async {
   await NotificationService.initialize();
   LogService.log('Notification service initialized', category: 'initialization');
   
-  // Then initialize workmanager
-  await Workmanager().initialize(
-    callbackDispatcher,
-    isInDebugMode: true,
-  );
-  LogService.log('Workmanager initialized', category: 'initialization');
+  // Update the Workmanager initialization
+  try {
+    await Workmanager().initialize(
+      callbackDispatcher,
+      isInDebugMode: true,
+    );
+    LogService.log('Workmanager initialized', category: 'initialization');
+  } catch (e) {
+    LogService.log('Error initializing Workmanager: $e', category: 'initialization_error');
+  }
   
   runApp(const MyApp());
 }
@@ -98,37 +102,36 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> {
+  int _currentIndex = 0;
+  
+  // Define page data in one place for better maintenance
+  final List<({String name, Widget page, IconData icon})> _pageData = const [
+    (name: 'Nieuws', page: NewsPage(), icon: Icons.newspaper),
+    (name: 'Radio', page: RadioPage(), icon: Icons.radio),
+    (name: 'TV', page: TVPage(), icon: Icons.tv),
+    (name: 'Instellingen', page: SettingsPage(), icon: Icons.settings),
+  ];
+
   @override
   void initState() {
     super.initState();
     LogService.log('Main screen initialized', category: 'navigation');
   }
 
-  int _currentIndex = 0;
-  final _pageNames = const ['Nieuws', 'Radio', 'TV', 'Instellingen'];
-  final _pages = const [
-    NewsPage(),
-    RadioPage(),
-    TVPage(),
-    SettingsPage(),
-  ];
-
   void _onTabChanged(int index) {
     if (_currentIndex != index) {
-      setState(() {
-        LogService.log(
-          'Navigatie van ${_pageNames[_currentIndex]} naar ${_pageNames[index]}', 
-          category: 'navigation'
-        );
-        _currentIndex = index;
-      });
+      LogService.log(
+        'Navigatie van ${_pageData[_currentIndex].name} naar ${_pageData[index].name}', 
+        category: 'navigation'
+      );
+      setState(() => _currentIndex = index);
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pages[_currentIndex],
+      body: _pageData[_currentIndex].page,
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onTabChanged,
@@ -136,11 +139,9 @@ class _MainScreenState extends State<MainScreen> {
         backgroundColor: const Color(0xFFFA6401),
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white70,
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.newspaper), label: 'Nieuws'),
-          BottomNavigationBarItem(icon: Icon(Icons.radio), label: 'Radio'),
-          BottomNavigationBarItem(icon: Icon(Icons.tv), label: 'TV'),
-          BottomNavigationBarItem(icon: Icon(Icons.settings), label: 'Instellingen'),
+        items: [
+          for (final data in _pageData)
+            BottomNavigationBarItem(icon: Icon(data.icon), label: data.name),
         ],
       ),
     );

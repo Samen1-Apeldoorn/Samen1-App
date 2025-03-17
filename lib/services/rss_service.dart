@@ -1,6 +1,5 @@
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:flutter/foundation.dart';
 import 'notification_service.dart';
 import 'log_service.dart';
 
@@ -23,8 +22,8 @@ class RSSService {
       if (firstItem.pubDate != lastCheck) {
         LogService.log('New content found, sending notification', category: 'rss');
         await NotificationService.showNotification(
-          title: 'Samen1 Nieuwsbericht', // Standard title for all notifications
-          body: firstItem.title,  // Article title as body
+          title: 'Samen1 Nieuwsbericht',
+          body: firstItem.title,
           payload: firstItem.link,
           imageUrl: firstItem.imageUrl,
         );
@@ -42,22 +41,22 @@ class RSSService {
 
   static Future<String> sendTestNotification() async {
     try {
-      debugPrint('Sending test notification...');
+      LogService.log('Sending test notification', category: 'rss');
       final firstItem = await _fetchLatestItem();
       if (firstItem == null) {
         return 'Fout bij ophalen feed';
       }
 
-      debugPrint('Sending notification for: ${firstItem.title}');
+      LogService.log('Sending notification for: ${firstItem.title}', category: 'rss');
       await NotificationService.showNotification(
-        title: 'Samen1 Nieuws', // Standard title for all notifications
-        body: firstItem.title, // Article title as body
+        title: 'Samen1 Nieuws',
+        body: firstItem.title,
         payload: firstItem.link,
         imageUrl: firstItem.imageUrl,
       );
       return 'Test melding verzonden voor: ${firstItem.title}';
     } catch (e) {
-      debugPrint('Error in sendTestNotification: $e');
+      LogService.log('Error sending test notification: $e', category: 'rss_error');
       return 'Fout: $e';
     }
   }
@@ -69,7 +68,7 @@ class RSSService {
   }
 
   static RSSItem? _parseFirstItem(String xmlString) {
-    debugPrint('Parsing RSS feed...');
+    LogService.log('Parsing RSS feed', category: 'rss');
 
     final itemRegex = RegExp(r'<item>(.*?)</item>', dotAll: true);
     final itemMatch = itemRegex.firstMatch(xmlString);
@@ -80,44 +79,34 @@ class RSSService {
       final titleRegex = RegExp(r'<title>\s*(.*?)\s*</title>', dotAll: true);
       final linkRegex = RegExp(r'<link>\s*(.*?)\s*</link>', dotAll: true);
       final dateRegex = RegExp(r'<pubDate>\s*(.*?)\s*</pubDate>', dotAll: true);
-      // Update image regex to match both media:content and enclosure
       final imageRegex = RegExp(r'<(media:content|enclosure)[^>]*(?:url|src)="([^"]*)"', dotAll: true);
+      final descRegex = RegExp(r'<description><!\[CDATA\[(.*?)\]\]></description>', dotAll: true);
 
       final title = titleRegex.firstMatch(itemContent)?.group(1)?.trim();
       final link = linkRegex.firstMatch(itemContent)?.group(1)?.trim();
       final pubDate = dateRegex.firstMatch(itemContent)?.group(1)?.trim();
-      // Update image URL extraction
       final imageMatch = imageRegex.firstMatch(itemContent);
       var imageUrl = imageMatch?.group(2)?.trim();
+      final description = descRegex.firstMatch(itemContent)?.group(1)?.trim() ?? '';
       
       // Transform thumbnail URL to full image URL
       if (imageUrl != null && imageUrl.contains('-150x150')) {
         imageUrl = imageUrl.replaceAll('-150x150', '');
-        debugPrint('Transformed image URL: $imageUrl');
+        LogService.log('Transformed image URL: $imageUrl', category: 'rss');
       }
 
-      debugPrint('Found image URL: $imageUrl'); // Debug logging
-
-      final descRegex = RegExp(r'<description><!\[CDATA\[(.*?)\]\]></description>', dotAll: true);
-      final description = descRegex.firstMatch(itemContent)?.group(1)?.trim() ?? '';
-
       if (title != null && link != null && pubDate != null) {
-        debugPrint('Successfully parsed RSS item:');
-        debugPrint('Title: $title');
-        debugPrint('Link: $link');
-        debugPrint('Date: $pubDate');
-        debugPrint('Description: $description');
-
+        LogService.log('Successfully parsed RSS item', category: 'rss');
         return RSSItem(
           title: title,
           link: link,
           pubDate: pubDate,
-          description: description,  // Use the extracted description
+          description: description,
           imageUrl: imageUrl,
         );
       }
     }
-    debugPrint('No valid RSS item found');
+    LogService.log('No valid RSS item found', category: 'rss_error');
     return null;
   }
 }
