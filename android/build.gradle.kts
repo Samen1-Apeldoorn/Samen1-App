@@ -16,7 +16,7 @@ subprojects {
     plugins.withId("com.android.library") {
         dependencies {
             "testImplementation"("org.robolectric:robolectric:4.10.3")
-            "testImplementation"("androidx.test:core:1.5.0")
+            "testImplementation"("androidx.test:core:1.6.1")
             "testImplementation"("androidx.test.ext:junit:1.2.1")
             "testImplementation"("org.mockito:mockito-core:5.4.0")
             "testImplementation"("org.mockito:mockito-android:5.4.0")
