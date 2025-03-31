@@ -21,7 +21,7 @@ subprojects {
             "testImplementation"("org.mockito:mockito-core:5.4.0")
             "testImplementation"("org.mockito:mockito-android:5.4.0")
             "testImplementation"("net.bytebuddy:byte-buddy:1.14.5")
-            "testImplementation"("net.bytebuddy:byte-buddy-agent:1.14.5")
+            "testImplementation"("net.bytebuddy:byte-buddy-agent:1.17.5")
         }
         
         tasks.withType<Test> {
