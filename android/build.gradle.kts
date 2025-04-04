@@ -18,8 +18,8 @@ subprojects {
             "testImplementation"("org.robolectric:robolectric:4.10.3")
             "testImplementation"("androidx.test:core:1.5.0")
             "testImplementation"("androidx.test.ext:junit:1.2.1")
-            "testImplementation"("org.mockito:mockito-core:5.4.0")
-            "testImplementation"("org.mockito:mockito-android:5.4.0")
+            "testImplementation"("org.mockito:mockito-core:5.17.0")
+            "testImplementation"("org.mockito:mockito-android:5.17.0")
             "testImplementation"("net.bytebuddy:byte-buddy:1.14.5")
             "testImplementation"("net.bytebuddy:byte-buddy-agent:1.14.5")
         }
