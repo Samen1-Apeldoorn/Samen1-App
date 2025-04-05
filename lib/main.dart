@@ -47,20 +47,6 @@ void main() async {
   runApp(const MyApp());
 }
 
-// Handle deep links from notifications
-void handleDeepLink(String? url) {
-  LogService.log('Attempting to handle deep link', category: 'navigation');
-  if (url != null && url.isNotEmpty) {
-    LogService.log('Deep link URL: $url', category: 'navigation');
-    navigatorKey.currentState?.push(
-      MaterialPageRoute(
-        builder: (context) => NewsArticleScreen(articleUrl: url),
-      ),
-    );
-  } else {
-    LogService.log('Empty or null deep link URL', category: 'navigation_error');
-  }
-}
 
 @pragma('vm:entry-point')
 void callbackDispatcher() {

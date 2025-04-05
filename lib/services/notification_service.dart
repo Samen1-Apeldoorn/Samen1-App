@@ -3,7 +3,6 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
-import '../main.dart';
 import 'log_service.dart';
 
 class NotificationService {
@@ -19,11 +18,7 @@ class NotificationService {
     );
     const settings = InitializationSettings(android: androidSettings, iOS: iosSettings);
 
-    await _notifications.initialize(settings,
-        onDidReceiveNotificationResponse: (details) async {
-      LogService.log('Notification clicked with payload: ${details.payload}', category: 'notifications');
-      handleDeepLink(details.payload);
-    });
+
 
     // Request permissions for Android
     final androidImplementation = _notifications.resolvePlatformSpecificImplementation<
