@@ -17,6 +17,7 @@ class NotificationService {
       requestSoundPermission: true,
     );
     const settings = InitializationSettings(android: androidSettings, iOS: iosSettings);
+    await _notifications.initialize(settings);
 
 
 

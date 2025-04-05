@@ -6,6 +6,7 @@ import '../services/log_service.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import '../styles/news_styles.dart';
+import 'package:flutter_html/flutter_html.dart';
 
 class NewsArticle {
   final int id;
@@ -39,7 +40,8 @@ class NewsArticle {
   }
 
   factory NewsArticle.fromJson(Map<String, dynamic> json) {
-    final media = json['_embedded']?['wp:featuredmedia']?.firstOrNull;
+    final featuredMedia = json['_embedded']?['wp:featuredmedia'];
+    final media = featuredMedia != null && featuredMedia.isNotEmpty ? featuredMedia[0] : null;
     
     return NewsArticle(
       id: json['id'],
@@ -100,7 +102,7 @@ class NewsService {
 class NewsArticleScreen extends StatelessWidget {
   final NewsArticle article;
   
-  const NewsArticleScreen({Key? key, required this.article}) : super(key: key);
+  const NewsArticleScreen({super.key, required this.article});
 
   @override
   Widget build(BuildContext context) {
@@ -187,7 +189,8 @@ class NewsArticleScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 16),
                   ],
-                  _buildHtmlContent(article.content),
+                  // Replace plain text content with HTML renderer
+                  _buildRichHtmlContent(article.content, context),
                   const SizedBox(height: 20),
                   if (article.imageCaption != null && article.imageCaption!.isNotEmpty)
                     Container(
@@ -217,7 +220,7 @@ class NewsArticleScreen extends StatelessWidget {
 }
 
 class NewsPage extends StatefulWidget {
-  const NewsPage({Key? key}) : super(key: key);
+  const NewsPage({super.key});
 
   @override
   State<NewsPage> createState() => _NewsPageState();
@@ -640,13 +643,42 @@ String _formatDate(String dateString) {
   }
 }
 
-// Utility function to parse HTML content - add outside the class to avoid duplication
-Widget _buildHtmlContent(String htmlContent) {
-  final document = htmlparser.parse(htmlContent);
-  final String plainText = document.body?.text ?? '';
-  
-  return Text(
-    plainText,
-    style: NewsStyles.contentStyle,
+// Replace the plain text HTML content builder with a rich HTML renderer
+Widget _buildRichHtmlContent(String htmlContent, BuildContext context) {
+  return Html(
+    data: htmlContent,
+    style: {
+      "body": Style(
+        fontSize: FontSize(16),
+        fontWeight: FontWeight.normal,
+        color: Colors.black87,
+        lineHeight: LineHeight(1.6),
+      ),
+      "p": Style(
+        margin: Margins.only(bottom: 16),
+      ),
+      "strong": Style(
+        fontWeight: FontWeight.bold,
+      ),
+      "img": Style(
+        padding: HtmlPaddings.zero,
+        margin: Margins.zero,
+      ),
+      "figure": Style(
+        margin: Margins.symmetric(vertical: 12),
+      ),
+      "figcaption": Style(
+        padding: HtmlPaddings.all(8),
+        fontSize: FontSize(14),
+        color: Colors.grey,
+        textAlign: TextAlign.center,
+        backgroundColor: Colors.grey[100],
+      ),
+    },
+    onLinkTap: (url, _, __) {
+      if (url != null) {
+        // Handle link taps if needed
+      }
+    },
   );
 }
