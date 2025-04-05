@@ -30,7 +30,7 @@ dependencies:
   device_info_plus: ^11.3.3
   html: ^0.15.4
   cached_network_image: ^3.3.0
-  intl: ^0.18.1
+  intl: ^0.20.0
   flutter_html: ^3.0.0
   just_audio: ^0.9.27
   
