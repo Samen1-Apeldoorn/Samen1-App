@@ -11,24 +11,6 @@ rootProject.layout.buildDirectory.value(newBuildDir)
 subprojects {
     val newSubprojectBuildDir: Directory = newBuildDir.dir(project.name)
     project.layout.buildDirectory.value(newSubprojectBuildDir)
-    
-    // Add test dependencies for Android projects
-    plugins.withId("com.android.library") {
-        dependencies {
-            "testImplementation"("org.robolectric:robolectric:4.14.1")
-            "testImplementation"("androidx.test:core:1.6.1")
-            "testImplementation"("androidx.test.ext:junit:1.2.1")
-            "testImplementation"("org.mockito:mockito-core:5.17.0")
-            "testImplementation"("org.mockito:mockito-android:5.17.0")
-            "testImplementation"("net.bytebuddy:byte-buddy:1.17.5")
-            "testImplementation"("net.bytebuddy:byte-buddy-agent:1.17.5")
-        }
-        
-        tasks.withType<Test> {
-            systemProperty("robolectric.dependency.repo.id", "central")
-            systemProperty("mockito.mock-maker-class", "mock-maker-inline")
-        }
-    }
 }
 
 subprojects {

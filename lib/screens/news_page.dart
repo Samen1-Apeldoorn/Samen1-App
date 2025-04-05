@@ -17,6 +17,7 @@ class NewsArticle {
   final String link;
   final String imageUrl;
   final String? imageCaption;
+  final String category;
 
   NewsArticle({
     required this.id,
@@ -27,6 +28,7 @@ class NewsArticle {
     required this.link,
     required this.imageUrl,
     this.imageCaption,
+    required this.category,
   });
 
   static String _extractImageUrl(Map<String, dynamic> media) {
@@ -39,21 +41,76 @@ class NewsArticle {
            media['source_url'] ?? '';
   }
 
+  static String _getCategoryFromClassList(List<dynamic>? classList) {
+    if (classList == null || classList.isEmpty) return 'Regio';
+    
+    // Define the category mappings
+    final categoryMap = {
+      'category-67': '112',
+      'category-112': '112',
+      'category-73': 'Cultuur',
+      'category-cultuur': 'Cultuur',
+      'category-72': 'Evenementen',
+      'category-evenementen': 'Evenementen',
+      'category-71': 'Gemeente',
+      'category-gemeente': 'Gemeente',
+      'category-69': 'Politiek',
+      'category-politiek': 'Politiek',
+      'category-1': 'Regio',
+      'category-regio': 'Regio',
+    };
+    
+    // Find the first matching category
+    for (final item in classList) {
+      if (item == null) continue; // Skip null items
+      final categoryString = item.toString().toLowerCase();
+      if (categoryString.startsWith('category-')) {
+        return categoryMap[item.toString()] ?? 'Regio';
+      }
+    }
+    
+    return 'Regio'; // Default if no category found
+  }
+
   factory NewsArticle.fromJson(Map<String, dynamic> json) {
     final featuredMedia = json['_embedded']?['wp:featuredmedia'];
     final media = featuredMedia != null && featuredMedia.isNotEmpty ? featuredMedia[0] : null;
     
+    // Handle class_list safely
+    List<dynamic>? classList;
+    try {
+      classList = json['class_list'] as List<dynamic>?;
+    } catch (e) {
+      // If casting fails, set to null
+      classList = null;
+    }
+    
+    // Decode HTML entities in title
+    String title = '';
+    if (json['title']?['rendered'] != null) {
+      final document = htmlparser.parse(json['title']['rendered']);
+      title = document.body?.text ?? '';
+    }
+    
+    // Decode HTML entities in excerpt
+    String excerpt = '';
+    if (json['excerpt']?['rendered'] != null) {
+      final document = htmlparser.parse(json['excerpt']['rendered']);
+      excerpt = document.body?.text ?? '';
+    }
+    
     return NewsArticle(
       id: json['id'],
       date: json['date'],
-      title: json['title']?['rendered'] ?? '',
+      title: title,
       content: json['content']?['rendered'] ?? '',
-      excerpt: json['excerpt']?['rendered'] ?? '',
+      excerpt: excerpt,
       link: json['link'] ?? '',
       imageUrl: media != null ? _extractImageUrl(media) : '',
       imageCaption: media?['caption']?['rendered'] != null
           ? htmlparser.parse(media!['caption']['rendered']).body?.text
           : null,
+      category: _getCategoryFromClassList(classList),
     );
   }
 }
@@ -61,7 +118,7 @@ class NewsArticle {
 class NewsService {
   static const String _baseUrl = 'https://api.omroepapeldoorn.nl/api/nieuws';
   
-  static Future<List<NewsArticle>> getNews({int page = 1, int perPage = 10}) async {
+  static Future<List<NewsArticle>> getNews({int page = 1, int perPage = 11}) async {
     try {
       LogService.log('Fetching news from: $_baseUrl?per_page=$perPage&page=$page', category: 'news_api');
       
@@ -125,7 +182,7 @@ class NewsArticleScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Hero image with title overlay
+            // Hero image with only title overlay
             if (article.imageUrl.isNotEmpty)
               Stack(
                 children: [
@@ -152,23 +209,48 @@ class NewsArticleScreen extends StatelessWidget {
                     child: Container(
                       padding: NewsStyles.defaultPadding,
                       decoration: NewsStyles.gradientOverlay,
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            article.title,
-                            style: NewsStyles.titleStyle,
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            _formatDate(article.date),
-                            style: NewsStyles.dateStyle,
-                          ),
-                        ],
+                      child: Text(
+                        article.title,
+                        style: NewsStyles.titleStyle,
+                        maxLines: 3,
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
                   ),
                 ],
+              ),
+            
+            // Category and date moved below the image
+            if (article.imageUrl.isNotEmpty)
+              Padding(
+                padding: NewsStyles.defaultPadding,
+                child: Row(
+                  children: [
+                    Text(
+                      article.category,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    const Text(
+                      "•",
+                      style: TextStyle(
+                        color: Colors.black45,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatDate(article.date),
+                      style: const TextStyle(
+                        color: Colors.black54,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             
             // Content
@@ -183,13 +265,36 @@ class NewsArticleScreen extends StatelessWidget {
                       style: NewsStyles.articleTitleStyle,
                     ),
                     const SizedBox(height: 8),
-                    Text(
-                      _formatDate(article.date),
-                      style: NewsStyles.articleDateStyle,
+                    Row(
+                      children: [
+                        Text(
+                          article.category,
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text(
+                          "•",
+                          style: TextStyle(
+                            color: Colors.black45,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          _formatDate(article.date),
+                          style: const TextStyle(
+                            color: Colors.black54,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
                     ),
                     const SizedBox(height: 16),
                   ],
-                  // Replace plain text content with HTML renderer
+                  // The HTML content renderer
                   _buildRichHtmlContent(article.content, context),
                   const SizedBox(height: 20),
                   if (article.imageCaption != null && article.imageCaption!.isNotEmpty)
@@ -228,19 +333,21 @@ class NewsPage extends StatefulWidget {
 
 class _NewsPageState extends State<NewsPage> {
   final List<NewsArticle> _articles = [];
-  List<NewsArticle> _preloadedArticles = []; // New: store preloaded articles
+  List<NewsArticle> _preloadedArticles = [];
   bool _isLoading = false;
-  bool _isPreloading = false; // New: track preloading state
+  bool _isPreloading = false;
   bool _hasError = false;
-  bool _hasMoreArticles = true; // New flag to track if more articles are available
+  bool _hasMoreArticles = true;
   int _currentPage = 1;
-  final ScrollController _scrollController = ScrollController(); // New scroll controller
+  final ScrollController _scrollController = ScrollController();
+  // Add debounce timer to prevent multiple rapid requests
+  DateTime _lastLoadTime = DateTime.now();
+  bool _loadingTriggered = false;
 
   @override
   void initState() {
     super.initState();
     _loadNews();
-    // Add scroll listener to detect when user reaches the bottom
     _scrollController.addListener(_scrollListener);
     LogService.log('News page opened', category: 'news');
   }
@@ -252,41 +359,76 @@ class _NewsPageState extends State<NewsPage> {
     super.dispose();
   }
 
-  // Scroll listener to detect when user is near the bottom
+  // Improved scroll listener with debouncing
   void _scrollListener() {
+    // Start preloading earlier - when we're 70% through the content
+    final scrollThreshold = 0.7 * _scrollController.position.maxScrollExtent;
+    
+    // Check if we should preload next page (when 70% through the list)
+    if (_scrollController.position.pixels >= scrollThreshold && 
+        !_isPreloading && 
+        !_loadingTriggered && 
+        _hasMoreArticles && 
+        _preloadedArticles.isEmpty) {
+      _preloadNextPage();
+    }
+    
+    // Load more when near the bottom (about 2-3 articles from bottom)
     if (_scrollController.position.pixels >= 
-        _scrollController.position.maxScrollExtent - 500) {
-      // Load more when we're 500 pixels from the bottom
-      if (!_isLoading && _hasMoreArticles) {
+        _scrollController.position.maxScrollExtent - 800) {
+      // Debounce - prevent multiple loads within 1 second
+      if (!_isLoading && 
+          !_loadingTriggered && 
+          _hasMoreArticles && 
+          DateTime.now().difference(_lastLoadTime).inMilliseconds > 1000) {
+        
+        _loadingTriggered = true;
         LogService.log('Nearing end of list, loading more articles', category: 'news');
-        _loadNews();
+        
+        // Use Future.delayed to slightly defer loading to prevent janky scrolling
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) _loadNews();
+        });
       }
     }
   }
 
-  // New: method to preload next page
+  // Improved preload method with better error handling
   Future<void> _preloadNextPage() async {
     if (_isPreloading || !_hasMoreArticles) return;
     
     _isPreloading = true;
+    LogService.log('Preloading news page ${_currentPage + 1}', category: 'news');
+    
     try {
-      LogService.log('Preloading news page ${_currentPage + 1}', category: 'news');
-      final articles = await NewsService.getNews(page: _currentPage + 1, perPage: 10);
+      // Use 11 articles per page
+      final articles = await NewsService.getNews(page: _currentPage + 1, perPage: 11);
       
-      if (articles.isEmpty) {
-        _hasMoreArticles = false;
-      } else {
-        _preloadedArticles = articles;
+      if (mounted) {
+        if (articles.isEmpty) {
+          _hasMoreArticles = false;
+        } else {
+          _preloadedArticles = articles;
+          LogService.log('Successfully preloaded ${articles.length} articles for page ${_currentPage + 1}', 
+              category: 'news');
+        }
       }
     } catch (e) {
-      LogService.log('Failed to preload news: $e', category: 'news_error');
+      LogService.log('Failed to preload news page ${_currentPage + 1}: $e', category: 'news_error');
+      // Don't set _hasMoreArticles to false on error - we'll retry later
     } finally {
-      _isPreloading = false;
+      if (mounted) {
+        _isPreloading = false;
+      }
     }
   }
 
+  // Improved loading with better state management
   Future<void> _loadNews() async {
     if (_isLoading || !_hasMoreArticles) return;
+    
+    _lastLoadTime = DateTime.now();
+    _loadingTriggered = false;
     
     setState(() {
       _isLoading = true;
@@ -294,13 +436,16 @@ class _NewsPageState extends State<NewsPage> {
 
     try {
       List<NewsArticle> articles;
+      
+      // Use preloaded articles if available
       if (_preloadedArticles.isNotEmpty) {
-        // Use preloaded articles if available
+        LogService.log('Using preloaded articles for page $_currentPage', category: 'news');
         articles = _preloadedArticles;
         _preloadedArticles = [];
       } else {
-        // Otherwise load from API
-        articles = await NewsService.getNews(page: _currentPage, perPage: 10);
+        // Otherwise load from API (11 articles per page)
+        LogService.log('Loading page $_currentPage directly', category: 'news');
+        articles = await NewsService.getNews(page: _currentPage, perPage: 11);
       }
       
       if (articles.isEmpty && _currentPage == 1) {
@@ -324,8 +469,10 @@ class _NewsPageState extends State<NewsPage> {
         _currentPage++;
       });
 
-      // Start preloading next page
-      _preloadNextPage();
+      // Start preloading next page immediately after current page is loaded
+      if (_hasMoreArticles && _preloadedArticles.isEmpty) {
+        _preloadNextPage();
+      }
       
       LogService.log('Loaded ${articles.length} articles. Total: ${_articles.length}', category: 'news');
     } catch (e) {
@@ -340,10 +487,11 @@ class _NewsPageState extends State<NewsPage> {
   Future<void> _refreshNews() async {
     setState(() {
       _articles.clear();
-      _preloadedArticles.clear(); // Clear preloaded articles
+      _preloadedArticles.clear();
       _currentPage = 1;
-      _hasMoreArticles = true; // Reset this flag on refresh
+      _hasMoreArticles = true;
       _hasError = false;
+      _loadingTriggered = false;
     });
     await _loadNews();
   }
@@ -409,17 +557,11 @@ class _NewsPageState extends State<NewsPage> {
     return ListView(
       controller: _scrollController,
       children: [
-        // Featured article
-        Padding(
-          padding: NewsStyles.defaultPadding,
-          child: _buildFeaturedArticle(_articles.first),
-        ),
+        // Featured article - no padding, full width
+        _buildFeaturedArticle(_articles.first),
         
-        // Divider between featured and grid articles
-        Padding(
-          padding: NewsStyles.horizontalPadding,
-          child: Divider(color: Colors.grey[300], height: 32),
-        ),
+        // Add spacing between featured article and grid
+        const SizedBox(height: 16),
         
         // Remaining articles in grid
         if (_articles.length > 1)
@@ -458,8 +600,8 @@ class _NewsPageState extends State<NewsPage> {
     return GestureDetector(
       onTap: () => _openArticle(article),
       child: Container(
-        decoration: NewsStyles.cardDecoration,
-        clipBehavior: Clip.antiAlias,
+        // Remove decoration to eliminate rounded corners for full-width
+        clipBehavior: Clip.none,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -468,16 +610,16 @@ class _NewsPageState extends State<NewsPage> {
                 children: [
                   CachedNetworkImage(
                     imageUrl: article.imageUrl,
-                    height: NewsStyles.featuredImageHeight,
+                    height: NewsStyles.featuredImageHeight + 40, // Slightly increase height
                     width: double.infinity,
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
-                      height: NewsStyles.featuredImageHeight,
+                      height: NewsStyles.featuredImageHeight + 40,
                       color: NewsStyles.placeholderColor,
                       child: const Center(child: CircularProgressIndicator()),
                     ),
                     errorWidget: (context, url, error) => Container(
-                      height: NewsStyles.featuredImageHeight,
+                      height: NewsStyles.featuredImageHeight + 40,
                       color: NewsStyles.placeholderColor,
                       child: const Icon(Icons.error, size: 40),
                     ),
@@ -493,15 +635,18 @@ class _NewsPageState extends State<NewsPage> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
+                            article.category,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 12,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
                             article.title,
                             style: NewsStyles.titleStyle,
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            _formatDate(article.date),
-                            style: NewsStyles.dateStyle,
                           ),
                         ],
                       ),
@@ -516,28 +661,30 @@ class _NewsPageState extends State<NewsPage> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
+                      article.category,
+                      style: const TextStyle(
+                        color: Colors.black87,
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
                       article.title,
                       style: NewsStyles.articleTitleStyle,
                       maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 6),
+                    const SizedBox(height: 4),
                     Text(
                       _formatDate(article.date),
-                      style: NewsStyles.articleDateStyle,
+                      style: const TextStyle(
+                        color: Colors.black54,
+                        fontSize: 12,
+                      ),
                     ),
                   ],
                 ),
               ),
-            Padding(
-              padding: NewsStyles.defaultPadding,
-              child: Text(
-                _getPlainText(article.excerpt),
-                style: NewsStyles.excerptStyle,
-                maxLines: 3,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
           ],
         ),
       ),
@@ -576,30 +723,71 @@ class _NewsPageState extends State<NewsPage> {
                   child: const Icon(Icons.error, size: 30),
                 ),
               ),
-            Padding(
-              padding: NewsStyles.smallPadding,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    article.title,
-                    style: NewsStyles.gridTitleStyle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _formatDate(article.date),
-                    style: NewsStyles.gridDateStyle,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    _getPlainText(article.excerpt),
-                    style: NewsStyles.gridExcerptStyle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
+            Expanded(
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.only(left: 8, right: 8, top: 8, bottom: 0),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.start,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    if (article.imageUrl.isEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 4),
+                        child: Text(
+                          article.category,
+                          style: const TextStyle(
+                            color: Colors.black87,
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    Text(
+                      article.title,
+                      style: NewsStyles.gridTitleStyle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    Text(
+                      _getPlainText(article.excerpt),
+                      style: NewsStyles.gridExcerptStyle,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const Spacer(),
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            article.category,
+                            style: const TextStyle(
+                              color: Colors.black87,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          const Text(
+                            "•",
+                            style: TextStyle(
+                              color: Colors.black45,
+                              fontSize: 11,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            _formatDate(article.date),
+                            style: const TextStyle(
+                              color: Colors.black45,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ],
@@ -643,7 +831,7 @@ String _formatDate(String dateString) {
   }
 }
 
-// Replace the plain text HTML content builder with a rich HTML renderer
+// Fix the HTML renderer to make images visible at the correct width
 Widget _buildRichHtmlContent(String htmlContent, BuildContext context) {
   return Html(
     data: htmlContent,
@@ -662,10 +850,13 @@ Widget _buildRichHtmlContent(String htmlContent, BuildContext context) {
       ),
       "img": Style(
         padding: HtmlPaddings.zero,
-        margin: Margins.zero,
+        margin: Margins.only(top: 8.0, bottom: 8.0),
+        // Make sure images are displayed at 100% of container width
+        display: Display.block,
       ),
       "figure": Style(
         margin: Margins.symmetric(vertical: 12),
+        display: Display.block,
       ),
       "figcaption": Style(
         padding: HtmlPaddings.all(8),
@@ -675,6 +866,7 @@ Widget _buildRichHtmlContent(String htmlContent, BuildContext context) {
         backgroundColor: Colors.grey[100],
       ),
     },
+    // Remove the onImageTap parameter that's causing an error
     onLinkTap: (url, _, __) {
       if (url != null) {
         // Handle link taps if needed
