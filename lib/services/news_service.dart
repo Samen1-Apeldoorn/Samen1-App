@@ -1,0 +1,155 @@
+import 'package:html/parser.dart' as htmlparser;
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'log_service.dart';
+
+class NewsArticle {
+  final int id;
+  final String date;
+  final String title;
+  final String content;
+  final String excerpt;
+  final String link;
+  final String imageUrl;
+  final String? imageCaption;
+  final String category;
+
+  NewsArticle({
+    required this.id,
+    required this.date,
+    required this.title,
+    required this.content,
+    required this.excerpt,
+    required this.link,
+    required this.imageUrl,
+    this.imageCaption,
+    required this.category,
+  });
+  
+  // Extract the image sizes from the media object
+  static String _extractImageUrl(Map<String, dynamic> media) {
+    final sizes = media['media_details']?['sizes'];
+    if (sizes == null) return media['source_url'] ?? '';
+    
+    return sizes['large']?['source_url'] ??
+           sizes['medium_large']?['source_url'] ??
+           sizes['medium']?['source_url'] ??
+           media['source_url'] ?? '';
+  }
+
+  // Get the category from the class_list field
+  static String _getCategoryFromClassList(List<dynamic>? classList) {
+    if (classList == null || classList.isEmpty) return 'Regio';
+    
+    // Define the category mappings
+    final categoryMap = {
+      'category-67': '112',
+      'category-112': '112',
+      'category-73': 'Cultuur',
+      'category-cultuur': 'Cultuur',
+      'category-72': 'Evenementen',
+      'category-evenementen': 'Evenementen',
+      'category-71': 'Gemeente',
+      'category-gemeente': 'Gemeente',
+      'category-69': 'Politiek',
+      'category-politiek': 'Politiek',
+      'category-1': 'Regio',
+      'category-regio': 'Regio',
+    };
+    
+    // Find the first matching category
+    for (final item in classList) {
+      if (item == null) continue; // Skip null items
+      final categoryString = item.toString().toLowerCase();
+      if (categoryString.startsWith('category-')) {
+        return categoryMap[item.toString()] ?? 'Regio';
+      }
+    }
+    
+    return 'Regio'; // Default if no category found
+  }
+
+  // Create a NewsArticle object from JSON data
+  factory NewsArticle.fromJson(Map<String, dynamic> json) {
+    final featuredMedia = json['_embedded']?['wp:featuredmedia'];
+    final media = featuredMedia != null && featuredMedia.isNotEmpty ? featuredMedia[0] : null;
+    
+    // Handle class_list safely
+    List<dynamic>? classList;
+    try {
+      classList = json['class_list'] as List<dynamic>?;
+    } catch (e) {
+      // If casting fails, set to null
+      classList = null;
+    }
+    
+    // Decode HTML entities in title
+    String title = '';
+    if (json['title']?['rendered'] != null) {
+      final document = htmlparser.parse(json['title']['rendered']);
+      title = document.body?.text ?? '';
+    }
+    
+    // Decode HTML entities in excerpt
+    String excerpt = '';
+    if (json['excerpt']?['rendered'] != null) {
+      final document = htmlparser.parse(json['excerpt']['rendered']);
+      excerpt = document.body?.text ?? '';
+    }
+    
+    return NewsArticle(
+      id: json['id'],
+      date: json['date'],
+      title: title,
+      content: json['content']?['rendered'] ?? '',
+      excerpt: excerpt,
+      link: json['link'] ?? '',
+      imageUrl: media != null ? _extractImageUrl(media) : '',
+      imageCaption: media?['caption']?['rendered'] != null
+          ? htmlparser.parse(media!['caption']['rendered']).body?.text
+          : null,
+      category: _getCategoryFromClassList(classList),
+    );
+  }
+}
+
+class NewsService {
+  static const String _baseUrl = 'https://api.omroepapeldoorn.nl/api/nieuws';
+  
+  static Future<List<NewsArticle>> getNews({int page = 1, int perPage = 11}) async {
+    try {
+      LogService.log('Fetching news from: $_baseUrl?per_page=$perPage&page=$page', category: 'news_api');
+      
+      final response = await http.get(
+        Uri.parse('$_baseUrl?per_page=$perPage&page=$page&_embed=true')
+      );
+      
+      LogService.log('API response status: ${response.statusCode}', category: 'news_api');
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        LogService.log('Received ${data.length} articles from API', category: 'news_api');
+        
+        if (data.isEmpty) {
+          return [];
+        }
+        
+        // Check first article for debugging
+        if (data.isNotEmpty) {
+          LogService.log('First article ID: ${data.first['id']}', category: 'news_api');
+        }
+        
+        return data.map((json) => NewsArticle.fromJson(json)).toList();
+      } else {
+        LogService.log(
+          'Failed to load news: ${response.statusCode} - ${response.body}', 
+          category: 'news_error'
+        );
+        return [];
+      }
+    } catch (e) {
+      LogService.log('Error fetching news: $e', category: 'news_error');
+      return [];
+    }
+  }
+}
