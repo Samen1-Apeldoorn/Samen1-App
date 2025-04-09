@@ -1,161 +1,10 @@
 import 'package:flutter/material.dart';
-import 'package:html/parser.dart' as htmlparser;
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
-import 'package:flutter_html/flutter_html.dart';
 import '../styles/news_styles.dart';
 import '../services/log_service.dart';
 import '../services/news_service.dart';
-
-class NewsArticleScreen extends StatelessWidget {
-  final NewsArticle article;
-  
-  const NewsArticleScreen({super.key, required this.article});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      extendBodyBehindAppBar: true,
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
-        leading: IconButton(
-          icon: Container(
-            padding: const EdgeInsets.all(8),
-            decoration: NewsStyles.backButtonContainer,
-            child: const Icon(Icons.arrow_back),
-          ),
-          onPressed: () => Navigator.of(context).pop(),
-        ),
-      ),
-      body: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Hero image with only title overlay
-            if (article.imageUrl.isNotEmpty)
-              Stack(
-                children: [
-                  CachedNetworkImage(
-                    imageUrl: article.imageUrl,
-                    width: double.infinity,
-                    height: NewsStyles.articleImageHeight,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      height: NewsStyles.articleImageHeight,
-                      color: NewsStyles.placeholderColor,
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      height: NewsStyles.articleImageHeight,
-                      color: NewsStyles.placeholderColor,
-                      child: const Icon(Icons.error, size: 40),
-                    ),
-                  ),
-                  Positioned(
-                    bottom: 0,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      padding: NewsStyles.defaultPadding,
-                      decoration: NewsStyles.gradientOverlay,
-                      child: Text(
-                        article.title,
-                        style: NewsStyles.titleStyle,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            
-            // Category and date moved below the image
-            if (article.imageUrl.isNotEmpty)
-              Padding(
-                padding: NewsStyles.defaultPadding,
-                child: Row(
-                  children: [
-                    Text(
-                      article.category,
-                      style: NewsStyles.categoryLabelDark,
-                    ),
-                    NewsStyles.mediumSpaceHorizontal,
-                    Text(
-                      "•",
-                      style: NewsStyles.separatorStyleLarge,
-                    ),
-                    NewsStyles.mediumSpaceHorizontal,
-                    Text(
-                      _formatDate(article.date),
-                      style: NewsStyles.articleDateStyle,
-                    ),
-                  ],
-                ),
-              ),
-            
-            // Content
-            Padding(
-              padding: NewsStyles.defaultPadding,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  if (article.imageUrl.isEmpty) ...[
-                    Text(
-                      article.title,
-                      style: NewsStyles.articleTitleStyle,
-                    ),
-                    NewsStyles.smallSpaceVertical,
-                    Row(
-                      children: [
-                        Text(
-                          article.category,
-                          style: NewsStyles.categoryLabelDark,
-                        ),
-                        NewsStyles.mediumSpaceHorizontal,
-                        Text(
-                          "•",
-                          style: NewsStyles.separatorStyleLarge,
-                        ),
-                        NewsStyles.mediumSpaceHorizontal,
-                        Text(
-                          _formatDate(article.date),
-                          style: NewsStyles.articleDateStyle,
-                        ),
-                      ],
-                    ),
-                    NewsStyles.largeSpaceVertical,
-                  ],
-                  // The HTML content renderer
-                  _buildRichHtmlContent(article.content, context),
-                  NewsStyles.largeSpaceVertical,
-                  if (article.imageCaption != null && article.imageCaption!.isNotEmpty)
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: NewsStyles.imageCaptionContainer,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.photo_camera, size: 16, color: Colors.grey),
-                          NewsStyles.mediumSpaceHorizontal,
-                          Expanded(
-                            child: Text(
-                              article.imageCaption!,
-                              style: NewsStyles.imageCaptionStyle,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
+import 'news_article_screen.dart';
 
 class NewsPage extends StatefulWidget {
   const NewsPage({super.key});
@@ -328,10 +177,17 @@ class _NewsPageState extends State<NewsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Nieuws'),
-        backgroundColor: Theme.of(context).colorScheme.primary,
-        foregroundColor: Colors.white,
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(40.0), // Smaller height
+        child: AppBar(
+          title: const Text(
+            'Nieuws',
+            style: TextStyle(fontSize: 16.0), // Smaller text
+          ),
+          backgroundColor: Theme.of(context).colorScheme.primary,
+          foregroundColor: Colors.white,
+          centerTitle: false, // Align text to left
+        ),
       ),
       body: RefreshIndicator(
         onRefresh: _refreshNews,
@@ -605,20 +461,6 @@ class _NewsPageState extends State<NewsPage> {
     );
     LogService.log('Opening article: ${article.id}', category: 'news');
   }
-
-  String _getPlainText(String htmlString) {
-    final document = htmlparser.parse(htmlString);
-    return document.body?.text ?? '';
-  }
-
-  String _formatDate(String dateString) {
-    try {
-      final date = DateTime.parse(dateString);
-      return DateFormat('d MMMM yyyy').format(date);
-    } catch (e) {
-      return dateString;
-    }
-  }
 }
 
 String _formatDate(String dateString) {
@@ -628,45 +470,4 @@ String _formatDate(String dateString) {
   } catch (e) {
     return dateString;
   }
-}
-
-Widget _buildRichHtmlContent(String htmlContent, BuildContext context) {
-  return Html(
-    data: htmlContent,
-    style: {
-      "body": Style(
-        fontSize: FontSize(NewsStyles.htmlBodyFontSize),
-        fontWeight: FontWeight.normal,
-        color: Colors.black87,
-        lineHeight: LineHeight(NewsStyles.htmlLineHeight),
-      ),
-      "p": Style(
-        margin: Margins.only(bottom: NewsStyles.htmlMarginBottom),
-      ),
-      "strong": Style(
-        fontWeight: FontWeight.bold,
-      ),
-      "img": Style(
-        padding: HtmlPaddings.zero,
-        margin: Margins.only(top: 8.0, bottom: 8.0),
-        display: Display.block,
-      ),
-      "figure": Style(
-        margin: Margins.symmetric(vertical: NewsStyles.htmlFigureMargin),
-        display: Display.block,
-      ),
-      "figcaption": Style(
-        padding: HtmlPaddings.all(NewsStyles.htmlCaptionPadding),
-        fontSize: FontSize(NewsStyles.htmlCaptionFontSize),
-        color: Colors.grey,
-        textAlign: TextAlign.center,
-        backgroundColor: NewsStyles.backgroundGreyColor,
-      ),
-    },
-    onLinkTap: (url, _, __) {
-      if (url != null) {
-        // Handle link taps if needed
-      }
-    },
-  );
 }
