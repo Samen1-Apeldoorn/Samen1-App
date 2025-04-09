@@ -194,9 +194,9 @@ class _NewsPageState extends State<NewsPage> {
 
 // Improved scroll listener with debouncing
   void _scrollListener() {
-    final scrollThreshold = 0.7 * _scrollController.position.maxScrollExtent;
+    final scrollThreshold = 0.8 * _scrollController.position.maxScrollExtent;
     
-// Check if we should preload next page (when 70% through the list)
+    // Check if we should preload next page (when 80% through the list)
     if (_scrollController.position.pixels >= scrollThreshold && 
         !_isPreloading && 
         !_loadingTriggered && 
@@ -205,18 +205,18 @@ class _NewsPageState extends State<NewsPage> {
       _preloadNextPage();
     }
     
-// Load more when near the bottom (about 2-3 articles from bottom)
+    // Load more when near the bottom (about 4-5 articles from bottom)
     if (_scrollController.position.pixels >= 
-        _scrollController.position.maxScrollExtent - 800) {
+        _scrollController.position.maxScrollExtent - 1200) {
       if (!_isLoading && 
           !_loadingTriggered && 
           _hasMoreArticles && 
-          DateTime.now().difference(_lastLoadTime).inMilliseconds > 1000) {
+          DateTime.now().difference(_lastLoadTime).inMilliseconds > 1500) {
         
         _loadingTriggered = true;
         LogService.log('Nearing end of list, loading more articles', category: 'news');
         
-// Use Future.delayed to slightly defer loading to prevent janky scrolling
+        // Use Future.delayed to slightly defer loading to prevent janky scrolling
         Future.delayed(const Duration(milliseconds: 100), () {
           if (mounted) _loadNews();
         });
@@ -231,8 +231,8 @@ class _NewsPageState extends State<NewsPage> {
     LogService.log('Preloading news page ${_currentPage + 1}', category: 'news');
     
     try {
-// Use 11 articles per page
-      final articles = await NewsService.getNews(page: _currentPage + 1, perPage: 11);
+      // Use 15 articles per page instead of 11
+      final articles = await NewsService.getNews(page: _currentPage + 1, perPage: 15);
       
       if (mounted) {
         if (articles.isEmpty) {
@@ -245,7 +245,6 @@ class _NewsPageState extends State<NewsPage> {
       }
     } catch (e) {
       LogService.log('Failed to preload news page ${_currentPage + 1}: $e', category: 'news_error');
-// Don't set _hasMoreArticles to false on error - we'll retry later
     } finally {
       if (mounted) {
         _isPreloading = false;
@@ -267,15 +266,15 @@ class _NewsPageState extends State<NewsPage> {
     try {
       List<NewsArticle> articles;
       
-// Use preloaded articles if available
+      // Use preloaded articles if available
       if (_preloadedArticles.isNotEmpty) {
         LogService.log('Using preloaded articles for page $_currentPage', category: 'news');
         articles = _preloadedArticles;
         _preloadedArticles = [];
       } else {
-// Otherwise load from API (11 articles per page)
+        // Otherwise load from API (15 articles per page instead of 11)
         LogService.log('Loading page $_currentPage directly', category: 'news');
-        articles = await NewsService.getNews(page: _currentPage, perPage: 11);
+        articles = await NewsService.getNews(page: _currentPage, perPage: 15);
       }
       
       if (articles.isEmpty && _currentPage == 1) {
@@ -296,11 +295,10 @@ class _NewsPageState extends State<NewsPage> {
       setState(() {
         _articles.addAll(articles);
         _isLoading = false;
-        _currentPage++// Start preloading next page immediately after current page is loaded
-;
+        _currentPage++;
       });
 
-// Start preloading next page immediately after current page is loaded
+      // Start preloading next page immediately after current page is loaded
       if (_hasMoreArticles && _preloadedArticles.isEmpty) {
         _preloadNextPage();
       }
@@ -386,20 +384,21 @@ class _NewsPageState extends State<NewsPage> {
 
     return ListView(
       controller: _scrollController,
+      padding: EdgeInsets.zero, // Remove default ListView padding
       children: [
-// Featured article - no padding, full width
+        // Featured article - no padding, full width
         _buildFeaturedArticle(_articles.first),
         NewsStyles.largeSpaceVertical,
         if (_articles.length > 1)
           Padding(
-            padding: NewsStyles.horizontalPadding,
-            child: GridView.builder(
+            padding: NewsStyles.horizontalPadding, // Using reduced horizontal padding
+            child: ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              gridDelegate: NewsStyles.gridDelegate,
               itemCount: _articles.length - 1,
+              separatorBuilder: (context, index) => const Divider(height: 16),
               itemBuilder: (context, index) {
-                return _buildGridArticleItem(_articles[index + 1]);
+                return _buildHorizontalArticleItem(_articles[index + 1]);
               },
             ),
           ),
@@ -504,88 +503,89 @@ class _NewsPageState extends State<NewsPage> {
     );
   }
 
-  Widget _buildGridArticleItem(NewsArticle article) {
+  Widget _buildHorizontalArticleItem(NewsArticle article) {
     return GestureDetector(
       onTap: () => _openArticle(article),
       child: Container(
-        decoration: NewsStyles.gridItemDecoration,
+        // Use min height constraint but allow it to grow for longer titles
+        constraints: BoxConstraints(
+          minHeight: NewsStyles.horizontalArticleHeight,
+        ),
+        padding: EdgeInsets.zero, // Remove any container padding
+        margin: const EdgeInsets.symmetric(horizontal: 2.0), // Add small margin instead of padding
+        decoration: NewsStyles.horizontalItemDecoration,
         clipBehavior: Clip.antiAlias,
-        child: Column(
+        child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            // Left side - Image with NO border radius on left
             if (article.imageUrl.isNotEmpty)
-              CachedNetworkImage(
-                imageUrl: article.imageUrl,
-                height: NewsStyles.gridImageHeight,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
-                  height: NewsStyles.gridImageHeight,
-                  color: NewsStyles.placeholderColor,
-                  child: Center(
-                    child: SizedBox(
-                      width: NewsStyles.smallLoaderSize,
-                      height: NewsStyles.smallLoaderSize,
-                      child: CircularProgressIndicator(strokeWidth: NewsStyles.smallLoaderStrokeWidth),
+              ClipRRect(
+                // Only apply border radius to right side corners
+                borderRadius: const BorderRadius.only(
+                  topRight: Radius.circular(0),
+                  bottomRight: Radius.circular(0),
+                  topLeft: Radius.circular(8),
+                  bottomLeft: Radius.circular(8),
+                ),
+                child: SizedBox(
+                  width: NewsStyles.horizontalImageWidth,
+                  height: NewsStyles.horizontalArticleHeight,
+                  child: CachedNetworkImage(
+                    imageUrl: article.imageUrl,
+                    fit: BoxFit.cover,
+                    placeholder: (context, url) => Container(
+                      color: NewsStyles.placeholderColor,
+                      child: Center(
+                        child: SizedBox(
+                          width: NewsStyles.smallLoaderSize,
+                          height: NewsStyles.smallLoaderSize,
+                          child: CircularProgressIndicator(strokeWidth: NewsStyles.smallLoaderStrokeWidth),
+                        ),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: NewsStyles.placeholderColor,
+                      child: const Icon(Icons.error, size: 30),
                     ),
                   ),
                 ),
-                errorWidget: (context, url, error) => Container(
-                  height: NewsStyles.gridImageHeight,
-                  color: NewsStyles.placeholderColor,
-                  child: const Icon(Icons.error, size: 30),
-                ),
               ),
+            // Right side - Content with slightly more space
             Expanded(
-              child: Container(
-                width: double.infinity,
-                padding: NewsStyles.articleItemPadding,
+              child: Padding(
+                padding: NewsStyles.horizontalArticleTextPadding,
                 child: Column(
-                  mainAxisAlignment: MainAxisAlignment.start,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    if (article.imageUrl.isEmpty)
-                      Padding(
-                        padding: NewsStyles.bottomPadding,
-                        child: Text(
+                    // Category and date row
+                    Row(
+                      children: [
+                        Text(
                           article.category,
-                          style: NewsStyles.categoryLabelBold,
+                          style: NewsStyles.categoryLabelGrid,
                         ),
-                      ),
+                        NewsStyles.smallSpaceHorizontal,
+                        Text(
+                          "•",
+                          style: NewsStyles.separatorStyle,
+                        ),
+                        NewsStyles.smallSpaceHorizontal,
+                        Text(
+                          _formatDate(article.date),
+                          style: NewsStyles.gridDateStyle,
+                        ),
+                      ],
+                    ),
+                    NewsStyles.smallSpaceVertical,
+                    // Title with more space for longer titles
                     Text(
                       article.title,
-                      style: NewsStyles.gridTitleStyle,
-                      maxLines: 2,
+                      style: NewsStyles.horizontalTitleStyle,
+                      maxLines: 3, // Explicitly allow 3 lines
                       overflow: TextOverflow.ellipsis,
                     ),
-                    Text(
-                      _getPlainText(article.excerpt),
-                      style: NewsStyles.gridExcerptStyle,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const Spacer(),
-                    Padding(
-                      padding: NewsStyles.bottomPadding,
-                      child: Row(
-                        children: [
-                          Text(
-                            article.category,
-                            style: NewsStyles.categoryLabelGrid,
-                          ),
-                          NewsStyles.smallSpaceHorizontal,
-                          Text(
-                            "•",
-                            style: NewsStyles.separatorStyle,
-                          ),
-                          NewsStyles.smallSpaceHorizontal,
-                          Text(
-                            _formatDate(article.date),
-                            style: NewsStyles.gridDateStyle,
-                          ),
-                        ],
-                      ),
-                    ),
+                    const SizedBox(height: 10), // More bottom spacing to ensure content fits
                   ],
                 ),
               ),

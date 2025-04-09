@@ -11,8 +11,8 @@ class NewsStyles {
   static const Color errorColor = Colors.red;
   
   // Shadow properties
-  static final defaultShadowColor = Colors.black.withOpacity(0.1);
-  static final lightShadowColor = Colors.black.withOpacity(0.05);
+  static final defaultShadowColor = Colors.black.withAlpha(26);
+  static final lightShadowColor = Colors.black.withAlpha(13);
   
   // Base text styles
   static const _baseTextStyle = TextStyle(
@@ -149,7 +149,7 @@ class NewsStyles {
       begin: Alignment.bottomCenter,
       end: Alignment.topCenter,
       colors: [
-        Colors.black.withOpacity(0.8),
+        Colors.black.withAlpha(204),
         Colors.transparent,
       ],
     ),
@@ -176,7 +176,7 @@ class NewsStyles {
   static const defaultPadding = EdgeInsets.all(16.0);
   static const smallPadding = EdgeInsets.all(10.0);
   static const verticalPadding = EdgeInsets.symmetric(vertical: 24.0);
-  static const horizontalPadding = EdgeInsets.symmetric(horizontal: 16.0);
+  static const horizontalPadding = EdgeInsets.symmetric(horizontal: 8.0); // Reduced from 16.0
   
   // NEW: Additional padding variants
   static const topPadding = EdgeInsets.only(top: 8.0);
@@ -224,4 +224,21 @@ class NewsStyles {
   static const htmlFigureMargin = 12.0;
   static const htmlCaptionFontSize = 14.0;
   static const htmlCaptionPadding = 8.0;
+
+  // NEW: Horizontal article styles
+  static const horizontalArticleHeight = 110.0; // Increased to prevent overflow
+  static const horizontalImageWidth = 120.0; // Larger image size (was 95.0)
+  static const horizontalArticleTextPadding = EdgeInsets.symmetric(horizontal: 10.0, vertical: 8.0);
+  
+  static final horizontalTitleStyle = _baseTitleStyle.copyWith(
+    fontSize: 15,
+    color: textPrimaryColor,
+    height: 1.3, // Add line height control to make text more compact
+  );
+  
+  static final horizontalItemDecoration = BoxDecoration(
+    color: backgroundLightColor,
+    borderRadius: BorderRadius.circular(8),
+    boxShadow: [lightShadow],
+  );
 }
