@@ -16,7 +16,14 @@ class RSSService {
       final firstItem = await _fetchLatestItem();
       if (firstItem == null) {
         LogService.log('Failed to fetch RSS feed', category: 'rss_error');
-        return 'Fout bij ophalen feed';
+        return '';  // Lege string bij fout
+      }
+      
+      // Check if category is enabled
+      final enabledCategories = prefs.getStringList('enabled_categories') ?? [];
+      if (!enabledCategories.contains(firstItem.category)) {
+        LogService.log('Skipping notification - category ${firstItem.category} is disabled', category: 'rss');
+        return '';
       }
       
       if (firstItem.pubDate != lastCheck) {
@@ -28,14 +35,14 @@ class RSSService {
           imageUrl: firstItem.imageUrl,
         );
         await prefs.setString(_lastCheckKey, firstItem.pubDate);
-        return 'Nieuwe melding verzonden: ${firstItem.title}';
+        return 'Nieuwe melding verzonden';  // Korte melding bij succes
       }
       
       LogService.log('No new content found', category: 'rss');
-      return 'Geen nieuwe artikelen gevonden';
+      return '';  // Lege string als er niks nieuws is
     } catch (e) {
       LogService.log('Error checking RSS: $e', category: 'rss_error');
-      return 'Fout: $e';
+      return '';  // Lege string bij fout
     }
   }
 
@@ -81,6 +88,7 @@ class RSSService {
       final dateRegex = RegExp(r'<pubDate>\s*(.*?)\s*</pubDate>', dotAll: true);
       final imageRegex = RegExp(r'<(media:content|enclosure)[^>]*(?:url|src)="([^"]*)"', dotAll: true);
       final descRegex = RegExp(r'<description><!\[CDATA\[(.*?)\]\]></description>', dotAll: true);
+      final categoryRegex = RegExp(r'<category>\s*(.*?)\s*</category>', dotAll: true);
 
       final title = titleRegex.firstMatch(itemContent)?.group(1)?.trim();
       final link = linkRegex.firstMatch(itemContent)?.group(1)?.trim();
@@ -88,6 +96,7 @@ class RSSService {
       final imageMatch = imageRegex.firstMatch(itemContent);
       var imageUrl = imageMatch?.group(2)?.trim();
       final description = descRegex.firstMatch(itemContent)?.group(1)?.trim() ?? '';
+      final category = categoryRegex.firstMatch(itemContent)?.group(1)?.trim() ?? 'Overig';
       
       // Transform thumbnail URL to full image URL
       if (imageUrl != null && imageUrl.contains('-150x150')) {
@@ -103,6 +112,7 @@ class RSSService {
           pubDate: pubDate,
           description: description,
           imageUrl: imageUrl,
+          category: category,
         );
       }
     }
@@ -117,6 +127,7 @@ class RSSItem {
   final String pubDate;
   final String description;
   final String? imageUrl;
+  final String category;
 
   RSSItem({
     required this.title, 
@@ -124,5 +135,6 @@ class RSSItem {
     required this.pubDate, 
     required this.description,
     this.imageUrl,
+    required this.category,
   });
 }

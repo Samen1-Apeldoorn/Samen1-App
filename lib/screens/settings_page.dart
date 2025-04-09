@@ -16,7 +16,8 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _notificationsEnabled = false;
-  String _checkInterval = '60';
+  final List<String> _categories = ["Regio", "112", "Gemeente", "Politiek", "Evenementen", "Cultuur"];
+  List<String> _enabledCategories = [];
 
   @override
   void initState() {
@@ -30,27 +31,27 @@ class _SettingsPageState extends State<SettingsPage> {
     final prefs = await SharedPreferences.getInstance();
     setState(() {
       _notificationsEnabled = prefs.getBool('notifications_enabled') ?? false;
-      _checkInterval = prefs.getString('check_interval') ?? '60';
+      _enabledCategories = prefs.getStringList('enabled_categories') ?? _categories.toList();
     });
   }
 
   Future<void> _saveSettings() async {
     LogService.log(
-      'Saving settings - Notifications: $_notificationsEnabled, Interval: $_checkInterval', 
+      'Saving settings - Notifications: $_notificationsEnabled, Categories: $_enabledCategories', 
       category: 'settings'
     );
     
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('notifications_enabled', _notificationsEnabled);
-    await prefs.setString('check_interval', _checkInterval);
+    await prefs.setStringList('enabled_categories', _enabledCategories);
 
     if (_notificationsEnabled) {
       await Workmanager().registerPeriodicTask(
         'samen1-rss-check',
         'checkRSSFeed',
-        frequency: Duration(minutes: int.parse(_checkInterval)),
+        frequency: const Duration(minutes: 10),
       );
-      LogService.log('Background task registered with interval: $_checkInterval minutes', category: 'settings');
+      LogService.log('Background task registered with 10 minute interval', category: 'settings');
     } else {
       await Workmanager().cancelByUniqueName('samen1-rss-check');
       LogService.log('Background task cancelled', category: 'settings');
@@ -252,42 +253,70 @@ class _SettingsPageState extends State<SettingsPage> {
           subtitle: const Text('Ontvang meldingen bij nieuwe artikelen'),
           value: _notificationsEnabled,
           onChanged: (value) {
-            setState(() => _notificationsEnabled = value);
+            setState(() {
+              _notificationsEnabled = value;
+              if (value) {
+                _enabledCategories = _categories.toList();
+              } else {
+                _enabledCategories.clear();
+              }
+            });
             _saveSettings();
           },
         ),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('Controle interval'),
-              const SizedBox(height: 8),
-              SizedBox(
-                width: double.infinity,
-                child: SegmentedButton<String>(
-                  segments: const [
-                    ButtonSegment(value: '10', label: Text('10m')),
-                    ButtonSegment(value: '30', label: Text('30m')),
-                    ButtonSegment(value: '60', label: Text('1u')),
-                    ButtonSegment(value: '240', label: Text('4u')),
-                  ],
-                  selected: {_checkInterval},
-                  onSelectionChanged: _notificationsEnabled
-                      ? (Set<String> newSelection) {
-                          setState(() => _checkInterval = newSelection.first);
-                          _saveSettings();
-                        }
-                      : null,
-                  style: const ButtonStyle(
-                    visualDensity: VisualDensity.compact,
-                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  ),
-                ),
-              ),
-            ],
+        if (_notificationsEnabled) ...[
+          const Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
+            child: Text(
+              'Selecteer meldings categorieën',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+            child: GridView.count(
+              shrinkWrap: true,
+              crossAxisCount: 2,
+              mainAxisSpacing: 6,
+              crossAxisSpacing: 6,
+              childAspectRatio: 3.5,
+              physics: const NeverScrollableScrollPhysics(),
+              children: _categories.map((category) {
+                final isSelected = _enabledCategories.contains(category);
+                return InkWell(
+                  onTap: () {
+                    setState(() {
+                      if (isSelected) {
+                        _enabledCategories.remove(category);
+                      } else {
+                        _enabledCategories.add(category);
+                      }
+                    });
+                    _saveSettings();
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(20),
+                      color: isSelected 
+                          ? Theme.of(context).colorScheme.primary
+                          : Colors.grey[200],
+                    ),
+                    child: Center(
+                      child: Text(
+                        category,
+                        style: TextStyle(
+                          color: isSelected ? Colors.white : Colors.black87,
+                          fontWeight: FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
         ListTile(
           title: const Text('Test melding'),
           subtitle: const Text('Stuur een test melding om te controleren'),
