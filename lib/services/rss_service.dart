@@ -1,5 +1,6 @@
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:html/parser.dart' as htmlparser;
 import 'notification_service.dart';
 import 'log_service.dart';
 
@@ -16,7 +17,7 @@ class RSSService {
       final firstItem = await _fetchLatestItem();
       if (firstItem == null) {
         LogService.log('Failed to fetch RSS feed', category: 'rss_error');
-        return '';  // Lege string bij fout
+        return '';
       }
       
       // Check if category is enabled
@@ -29,20 +30,20 @@ class RSSService {
       if (firstItem.pubDate != lastCheck) {
         LogService.log('New content found, sending notification', category: 'rss');
         await NotificationService.showNotification(
-          title: 'Samen1 Nieuwsbericht',
-          body: firstItem.title,
+          title: 'Samen1 Nieuws',
+          body: _sanitizeText(firstItem.title),
           payload: firstItem.link,
           imageUrl: firstItem.imageUrl,
         );
         await prefs.setString(_lastCheckKey, firstItem.pubDate);
-        return 'Nieuwe melding verzonden';  // Korte melding bij succes
+        return '';
       }
       
       LogService.log('No new content found', category: 'rss');
-      return '';  // Lege string als er niks nieuws is
+      return '';
     } catch (e) {
       LogService.log('Error checking RSS: $e', category: 'rss_error');
-      return '';  // Lege string bij fout
+      return '';
     }
   }
 
@@ -57,11 +58,11 @@ class RSSService {
       LogService.log('Sending notification for: ${firstItem.title}', category: 'rss');
       await NotificationService.showNotification(
         title: 'Samen1 Nieuws',
-        body: firstItem.title,
+        body: _sanitizeText(firstItem.title),
         payload: firstItem.link,
         imageUrl: firstItem.imageUrl,
       );
-      return 'Test melding verzonden voor: ${firstItem.title}';
+      return '';
     } catch (e) {
       LogService.log('Error sending test notification: $e', category: 'rss_error');
       return 'Fout: $e';
@@ -118,6 +119,39 @@ class RSSService {
     }
     LogService.log('No valid RSS item found', category: 'rss_error');
     return null;
+  }
+
+  // New helper method to sanitize text
+  static String _sanitizeText(String text) {
+    // Replace common HTML entities and special characters
+    String sanitized = text
+      .replaceAll('&#8217;', "'")
+      .replaceAll('&#8216;', "'")
+      .replaceAll('&#8220;', '"')
+      .replaceAll('&#8221;', '"')
+      .replaceAll('&quot;', '"')
+      .replaceAll('&amp;', '&')
+      .replaceAll('&lt;', '<')
+      .replaceAll('&gt;', '>')
+      .replaceAll('&nbsp;', ' ')
+      .replaceAll('&rsquo;', "'")
+      .replaceAll('&lsquo;', "'")
+      .replaceAll('&rdquo;', '"')
+      .replaceAll('&ldquo;', '"')
+      .replaceAll('&ndash;', '–')
+      .replaceAll('&mdash;', '—')
+      .replaceAll('&#39;', "'");
+    
+    // For any remaining HTML entities, try to decode them
+    try {
+      // Parse as HTML and get text content to decode any remaining entities
+      final document = htmlparser.parse(sanitized);
+      sanitized = document.body?.text ?? sanitized;
+    } catch (e) {
+      LogService.log('Error decoding HTML entities: $e', category: 'rss_error');
+    }
+    
+    return sanitized;
   }
 }
 

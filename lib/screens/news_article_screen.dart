@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_html/flutter_html.dart';
-import '../styles/article_styles.dart';
+import '../styles/news_styles.dart';
 import '../services/news_service.dart';
 
 class NewsArticleScreen extends StatelessWidget {
@@ -20,9 +20,11 @@ class NewsArticleScreen extends StatelessWidget {
         iconTheme: const IconThemeData(color: Colors.white),
         leading: IconButton(
           icon: Container(
-            padding: ArticleStyles.backButtonPadding,
-            decoration: ArticleStyles.backButtonContainer,
-            child: const Icon(Icons.arrow_back),
+            padding: NewsStyles.smallPadding,
+            decoration: NewsStyles.backButtonContainer,
+            child: const Center(
+              child: Icon(Icons.arrow_back, size: 20),
+            ),
           ),
           onPressed: () => Navigator.of(context).pop(),
         ),
@@ -34,20 +36,25 @@ class NewsArticleScreen extends StatelessWidget {
             if (article.imageUrl.isNotEmpty)
               Stack(
                 children: [
-                  CachedNetworkImage(
-                    imageUrl: article.imageUrl,
+                  SizedBox(
                     width: double.infinity,
-                    height: ArticleStyles.articleImageHeight,
-                    fit: BoxFit.cover,
-                    placeholder: (context, url) => Container(
-                      height: ArticleStyles.articleImageHeight,
-                      color: ArticleStyles.placeholderColor,
-                      child: const Center(child: CircularProgressIndicator()),
-                    ),
-                    errorWidget: (context, url, error) => Container(
-                      height: ArticleStyles.articleImageHeight,
-                      color: ArticleStyles.placeholderColor,
-                      child: const Icon(Icons.error, size: 40),
+                    height: NewsStyles.articleImageHeight,
+                    child: CachedNetworkImage(
+                      imageUrl: article.imageUrl,
+                      width: double.infinity,
+                      height: NewsStyles.articleImageHeight,
+                      fit: BoxFit.cover,
+                      alignment: Alignment.center, // Center the image content
+                      placeholder: (context, url) => Container(
+                        height: NewsStyles.articleImageHeight,
+                        color: NewsStyles.placeholderColor,
+                        child: const Center(child: CircularProgressIndicator()),
+                      ),
+                      errorWidget: (context, url, error) => Container(
+                        height: NewsStyles.articleImageHeight,
+                        color: NewsStyles.placeholderColor,
+                        child: const Icon(Icons.error, size: 40),
+                      ),
                     ),
                   ),
                   Positioned(
@@ -55,11 +62,11 @@ class NewsArticleScreen extends StatelessWidget {
                     left: 0,
                     right: 0,
                     child: Container(
-                      padding: ArticleStyles.defaultPadding,
-                      decoration: ArticleStyles.gradientOverlay,
+                      padding: NewsStyles.defaultPadding,
+                      decoration: NewsStyles.gradientOverlay,
                       child: Text(
                         article.title,
-                        style: ArticleStyles.titleStyle,
+                        style: NewsStyles.titleStyle,
                         maxLines: 3,
                         overflow: TextOverflow.ellipsis,
                       ),
@@ -69,78 +76,92 @@ class NewsArticleScreen extends StatelessWidget {
               ),
             
             if (article.imageUrl.isNotEmpty)
-              Padding(
-                padding: ArticleStyles.defaultPadding,
+              Container(
+                width: double.infinity,
+                margin: EdgeInsets.zero, // Remove margin to eliminate the white gap
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                decoration: BoxDecoration(
+                  color: NewsStyles.backgroundGreyColor,
+                ),
                 child: Row(
+                  mainAxisAlignment: MainAxisAlignment.start,
                   children: [
                     Text(
                       article.category,
-                      style: ArticleStyles.categoryStyle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.black87,
+                        fontWeight: FontWeight.w600,
+                        height: 1.0,
+                      ),
                     ),
-                    ArticleStyles.mediumSpaceHorizontal,
+                    const SizedBox(width: 4),
                     Text(
                       "•",
-                      style: ArticleStyles.separatorStyle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.black87,
+                        height: 1.0,
+                      ),
                     ),
-                    ArticleStyles.mediumSpaceHorizontal,
+                    const SizedBox(width: 4),
                     Text(
                       _formatDate(article.date),
-                      style: ArticleStyles.dateStyle,
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Color(0xFF757575),
+                        height: 1.0,
+                      ),
                     ),
+                    if (article.imageCaption != null && article.imageCaption!.isNotEmpty) ...[
+                      const Spacer(),
+                      Text(
+                        article.imageCaption!,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Color(0xFF757575),
+                          height: 1.0,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
                   ],
                 ),
               ),
             
             Padding(
-              padding: ArticleStyles.defaultPadding,
+              padding: NewsStyles.defaultPadding,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   if (article.imageUrl.isEmpty) ...[
                     Text(
                       article.title,
-                      style: ArticleStyles.articleTitleStyle,
+                      style: NewsStyles.articleTitleStyle,
                     ),
-                    ArticleStyles.smallSpaceVertical,
+                    NewsStyles.smallSpaceVertical,
                     Row(
                       children: [
                         Text(
                           article.category,
-                          style: ArticleStyles.categoryStyle,
+                          style: NewsStyles.categoryLabelDark,
                         ),
-                        ArticleStyles.mediumSpaceHorizontal,
+                        NewsStyles.mediumSpaceHorizontal,
                         Text(
                           "•",
-                          style: ArticleStyles.separatorStyle,
+                          style: NewsStyles.separatorStyle,
                         ),
-                        ArticleStyles.mediumSpaceHorizontal,
+                        NewsStyles.mediumSpaceHorizontal,
                         Text(
                           _formatDate(article.date),
-                          style: ArticleStyles.dateStyle,
+                          style: NewsStyles.articleDateStyle,
                         ),
                       ],
                     ),
-                    ArticleStyles.largeSpaceVertical,
+                    NewsStyles.largeSpaceVertical,
                   ],
                   _buildArticleContent(article.content, context),
-                  ArticleStyles.largeSpaceVertical,
-                  if (article.imageCaption != null && article.imageCaption!.isNotEmpty)
-                    Container(
-                      padding: ArticleStyles.captionPadding,
-                      decoration: ArticleStyles.imageCaptionContainer,
-                      child: Row(
-                        children: [
-                          const Icon(Icons.photo_camera, size: 16, color: Colors.grey),
-                          ArticleStyles.mediumSpaceHorizontal,
-                          Expanded(
-                            child: Text(
-                              article.imageCaption!,
-                              style: ArticleStyles.imageCaptionStyle,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  NewsStyles.largeSpaceVertical,
                 ],
               ),
             ),
@@ -164,13 +185,13 @@ class NewsArticleScreen extends StatelessWidget {
       data: htmlContent,
       style: {
         "body": Style(
-          fontSize: FontSize(ArticleStyles.htmlBodyFontSize),
+          fontSize: FontSize(NewsStyles.htmlBodyFontSize),
           fontWeight: FontWeight.normal,
           color: Colors.black87,
-          lineHeight: LineHeight(ArticleStyles.htmlLineHeight),
+          lineHeight: LineHeight(NewsStyles.htmlLineHeight),
         ),
         "p": Style(
-          margin: Margins.only(bottom: ArticleStyles.htmlMarginBottom),
+          margin: Margins.only(bottom: NewsStyles.htmlMarginBottom),
         ),
         "strong": Style(
           fontWeight: FontWeight.bold,
@@ -181,15 +202,15 @@ class NewsArticleScreen extends StatelessWidget {
           display: Display.block,
         ),
         "figure": Style(
-          margin: Margins.symmetric(vertical: ArticleStyles.htmlFigureMargin),
+          margin: Margins.symmetric(vertical: NewsStyles.htmlFigureMargin),
           display: Display.block,
         ),
         "figcaption": Style(
-          padding: HtmlPaddings.all(ArticleStyles.htmlCaptionPadding),
-          fontSize: FontSize(ArticleStyles.htmlCaptionFontSize),
+          padding: HtmlPaddings.all(NewsStyles.htmlCaptionPadding),
+          fontSize: FontSize(NewsStyles.htmlCaptionFontSize),
           color: Colors.grey,
           textAlign: TextAlign.center,
-          backgroundColor: ArticleStyles.backgroundGreyColor,
+          backgroundColor: NewsStyles.backgroundGreyColor,
         ),
       },
     );

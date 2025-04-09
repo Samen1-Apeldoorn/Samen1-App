@@ -65,8 +65,14 @@ class ArticleStyles {
   static const EdgeInsets captionPadding = EdgeInsets.all(12.0);
   static const EdgeInsets backButtonPadding = EdgeInsets.all(8.0);
 
-  static const SizedBox smallSpaceVertical = SizedBox(height: 4.0);
-  static const SizedBox mediumSpaceHorizontal = SizedBox(width: 8.0);
+  // Spacing constants
+  static const double smallSpace = 4.0;
+  static const double mediumSpace = 8.0;
+  
+  // Spacing widgets
+  static const SizedBox smallSpaceHorizontal = SizedBox(width: smallSpace);
+  static const SizedBox smallSpaceVertical = SizedBox(height: smallSpace);
+  static const SizedBox mediumSpaceHorizontal = SizedBox(width: mediumSpace);
   static const SizedBox largeSpaceVertical = SizedBox(height: 16.0);
 
   // Dimensions

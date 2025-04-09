@@ -61,11 +61,11 @@ class _SettingsPageState extends State<SettingsPage> {
   Future<void> _sendTestNotification() async {
     LogService.log('Test notification requested', category: 'settings');
     await NotificationService.initialize();
-    final result = await RSSService.sendTestNotification();
+    await RSSService.sendTestNotification();
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(result)),
+        const SnackBar(content: Text('Test melding verzonden')),
       );
     }
   }

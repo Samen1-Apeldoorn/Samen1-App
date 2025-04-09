@@ -54,8 +54,8 @@ class NewsStyles {
   );
 
   static final gridDateStyle = _baseTextStyle.copyWith(
-    color: textTertiaryColor,
-    fontSize: 10,
+    color: textTertiaryColor,  // Grijzere kleur
+    fontSize: 11,  // Zelfde grootte als de rest
   );
 
   static final excerptStyle = _baseContentStyle.copyWith(
@@ -103,6 +103,12 @@ class NewsStyles {
     color: Colors.black87,
     fontSize: 12,
     fontWeight: FontWeight.bold,
+  );
+
+  static final categoryLabelBoldSmall = _baseTextStyle.copyWith(
+    color: Colors.black87,
+    fontSize: 11,
+    fontWeight: FontWeight.w600,  // Semi-bold voor subtiele nadruk
   );
   
   // NEW: Separator styles
