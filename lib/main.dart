@@ -51,7 +51,7 @@ void main() async {
   try {
     await Workmanager().initialize(
       callbackDispatcher,
-      isInDebugMode: true,
+      isInDebugMode: true
     );
     LogService.log('Workmanager initialized', category: 'initialization');
   } catch (e) {
@@ -65,10 +65,23 @@ void main() async {
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((taskName, inputData) async {
-    if (taskName == 'checkRSSFeed') {
-      await RSSService.checkForNewContent();
+    try {
+      // Initialize required services for background task
+      WidgetsFlutterBinding.ensureInitialized();
+      await NotificationService.initialize();
+      
+      LogService.log('Background task started: $taskName', category: 'background_task');
+      
+      if (taskName == 'checkRSSFeed') {
+        await RSSService.checkForNewContent();
+      }
+      
+      LogService.log('Background task completed successfully', category: 'background_task');
+      return true;
+    } catch (e, stack) {
+      LogService.log('Background task error: $e\n$stack', category: 'background_task_error');
+      return false;
     }
-    return true;
   });
 }
 

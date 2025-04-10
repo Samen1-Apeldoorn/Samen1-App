@@ -93,14 +93,14 @@ class _SettingsPageState extends State<SettingsPage> {
 
       if (_notificationsEnabled) {
         LogService.log(
-          'SettingsPage: Setting up background tasks with 10 minute interval', 
+          'SettingsPage: Setting up background tasks with 15 minute interval', 
           category: 'settings'
         );
         
         await Workmanager().registerPeriodicTask(
           'samen1-rss-check',
           'checkRSSFeed',
-          frequency: const Duration(minutes: 10),
+          frequency: const Duration(minutes: 15),
         );
       } else {
         LogService.log('SettingsPage: Canceling background tasks', category: 'settings');

@@ -116,9 +116,16 @@ class NewsArticle {
 class NewsService {
   static const String _baseUrl = 'https://api.omroepapeldoorn.nl/api/nieuws';
   
-  static Future<List<NewsArticle>> getNews({int page = 1, int perPage = 11}) async {
+  static Future<List<NewsArticle>> getNews({
+    int page = 1, 
+    int perPage = 11,
+    int skipFirst = 0,
+  }) async {
     try {
-      LogService.log('Fetching news from: $_baseUrl?per_page=$perPage&page=$page', category: 'news_api');
+      LogService.log(
+        'Fetching news from: $_baseUrl?per_page=$perPage&page=$page (skip: $skipFirst)', 
+        category: 'news_api'
+      );
       
       final response = await http.get(
         Uri.parse('$_baseUrl?per_page=$perPage&page=$page&_embed=true')
@@ -134,12 +141,10 @@ class NewsService {
           return [];
         }
         
-        // Check first article for debugging
-        if (data.isNotEmpty) {
-          LogService.log('First article ID: ${data.first['id']}', category: 'news_api');
-        }
+        // Skip the first n articles if specified
+        final processedData = skipFirst > 0 ? data.skip(skipFirst).toList() : data;
         
-        return data.map((json) => NewsArticle.fromJson(json)).toList();
+        return processedData.map((json) => NewsArticle.fromJson(json)).toList();
       } else {
         LogService.log(
           'Failed to load news: ${response.statusCode} - ${response.body}', 

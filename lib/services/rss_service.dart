@@ -12,7 +12,16 @@ class RSSService {
     try {
       LogService.log('Checking for new RSS content', category: 'rss');
       final prefs = await SharedPreferences.getInstance();
+      
+      // Check if notifications are enabled
+      final notificationsEnabled = prefs.getBool('notifications_enabled') ?? false;
+      if (!notificationsEnabled) {
+        LogService.log('Notifications are disabled, skipping check', category: 'rss');
+        return '';
+      }
+      
       final lastCheck = prefs.getString(_lastCheckKey) ?? '';
+      LogService.log('Last check time: $lastCheck', category: 'rss');
 
       final firstItem = await _fetchLatestItem();
       if (firstItem == null) {
@@ -20,9 +29,18 @@ class RSSService {
         return '';
       }
       
+      LogService.log('Fetched item - Title: ${firstItem.title}, Category: ${firstItem.category}, Date: ${firstItem.pubDate}', category: 'rss');
+      
       // Check if category is enabled
       final enabledCategories = prefs.getStringList('enabled_categories') ?? [];
-      if (!enabledCategories.contains(firstItem.category)) {
+      LogService.log('Enabled categories: ${enabledCategories.join(", ")}', category: 'rss');
+      
+      // Case-insensitive category check
+      final isEnabled = enabledCategories.any(
+        (enabled) => enabled.toLowerCase() == firstItem.category.toLowerCase()
+      );
+      
+      if (!isEnabled) {
         LogService.log('Skipping notification - category ${firstItem.category} is disabled', category: 'rss');
         return '';
       }
@@ -30,19 +48,20 @@ class RSSService {
       if (firstItem.pubDate != lastCheck) {
         LogService.log('New content found, sending notification', category: 'rss');
         await NotificationService.showNotification(
-          title: 'Samen1 Nieuws',
+          title: firstItem.category,
           body: _sanitizeText(firstItem.title),
           payload: firstItem.link,
           imageUrl: firstItem.imageUrl,
         );
         await prefs.setString(_lastCheckKey, firstItem.pubDate);
+        LogService.log('Notification sent and last check time updated', category: 'rss');
         return '';
       }
       
       LogService.log('No new content found', category: 'rss');
       return '';
-    } catch (e) {
-      LogService.log('Error checking RSS: $e', category: 'rss_error');
+    } catch (e, stack) {
+      LogService.log('Error checking RSS: $e\n$stack', category: 'rss_error');
       return '';
     }
   }

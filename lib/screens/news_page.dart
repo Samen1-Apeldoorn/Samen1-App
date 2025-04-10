@@ -25,11 +25,14 @@ class _NewsPageState extends State<NewsPage> {
 // Add debounce timer to prevent multiple rapid requests
   DateTime _lastLoadTime = DateTime.now();
   bool _loadingTriggered = false;
+  static const int _initialLoadCount = 6;
+  static const int _fullPageCount = 15;
+  bool _loadingRemainingArticles = false;
 
   @override
   void initState() {
     super.initState();
-    _loadNews();
+    _loadInitialNews();
     _scrollController.addListener(_scrollListener);
     LogService.log('News page opened', category: 'news');
   }
@@ -170,6 +173,75 @@ class _NewsPageState extends State<NewsPage> {
     }
   }
 
+  Future<void> _loadInitialNews() async {
+    if (_isLoading || !_hasMoreArticles) return;
+    
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      // Load initial batch of articles
+      final articles = await NewsService.getNews(page: _currentPage, perPage: _initialLoadCount);
+      
+      if (mounted) {
+        setState(() {
+          _articles.addAll(articles);
+          _isLoading = false;
+          if (articles.isEmpty) {
+            _hasError = _currentPage == 1;
+            _hasMoreArticles = false;
+          }
+        });
+        
+        // Load remaining articles for the current page in the background
+        _loadRemainingArticles();
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = _articles.isEmpty;
+        });
+      }
+      LogService.log('Failed to load initial news: $e', category: 'news_error');
+    }
+  }
+
+  Future<void> _loadRemainingArticles() async {
+    if (_loadingRemainingArticles) return;
+    
+    _loadingRemainingArticles = true;
+    LogService.log('Loading remaining articles for current page', category: 'news');
+    
+    try {
+      final remainingArticles = await NewsService.getNews(
+        page: _currentPage,
+        perPage: _fullPageCount,
+        skipFirst: _initialLoadCount
+      );
+      
+      if (mounted) {
+        setState(() {
+          _articles.addAll(remainingArticles);
+          _loadingRemainingArticles = false;
+        });
+        
+        // Start preloading next page after loading remaining articles
+        // Alleen increment currentPage nadat we de preload zijn gestart
+        if (_hasMoreArticles && _preloadedArticles.isEmpty) {
+          await _preloadNextPage();
+          setState(() {
+            _currentPage++;
+          });
+        }
+      }
+    } catch (e) {
+      _loadingRemainingArticles = false;
+      LogService.log('Failed to load remaining articles: $e', category: 'news_error');
+    }
+  }
+
   Future<void> _refreshNews() async {
     setState(() {
       _articles.clear();
@@ -178,8 +250,9 @@ class _NewsPageState extends State<NewsPage> {
       _hasMoreArticles = true;
       _hasError = false;
       _loadingTriggered = false;
+      _loadingRemainingArticles = false;
     });
-    await _loadNews();
+    await _loadInitialNews();
   }
 
   @override
