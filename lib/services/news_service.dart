@@ -157,4 +157,63 @@ class NewsService {
       return [];
     }
   }
+
+  static Future<List<NewsArticle>> getNewsByCategory({
+    required int categoryId,
+    int page = 1, 
+    int perPage = 15,
+    int skipFirst = 0,
+  }) async {
+    try {
+      final categoryUrl = 'https://api.omroepapeldoorn.nl/api/categorie?per_page=$perPage&page=$page&categorie=$categoryId&_embed=true';
+      
+      LogService.log(
+        'Fetching category news from: $categoryUrl (skip: $skipFirst)', 
+        category: 'news_api'
+      );
+      
+      final response = await http.get(Uri.parse(categoryUrl));
+      
+      LogService.log('API response status: ${response.statusCode}', category: 'news_api');
+      
+      if (response.statusCode == 200) {
+        final List<dynamic> data = json.decode(response.body);
+        LogService.log('Received ${data.length} category articles from API', category: 'news_api');
+        
+        if (data.isEmpty) {
+          return [];
+        }
+        
+        // Skip the first n articles if specified
+        final processedData = skipFirst > 0 ? data.skip(skipFirst).toList() : data;
+        
+        return processedData.map((json) => NewsArticle.fromJson(json)).toList();
+      } else if (response.statusCode == 429) {
+        // Handle rate limiting with a small delay and retry
+        LogService.log('Rate limited (429), waiting briefly before retry', category: 'news_api');
+        await Future.delayed(const Duration(milliseconds: 500));
+        
+        // Retry the request once
+        final retryResponse = await http.get(Uri.parse(categoryUrl));
+        if (retryResponse.statusCode == 200) {
+          final List<dynamic> data = json.decode(retryResponse.body);
+          LogService.log('Retry successful, received ${data.length} category articles', category: 'news_api');
+          
+          if (data.isEmpty) {
+            return [];
+          }
+          
+          final processedData = skipFirst > 0 ? data.skip(skipFirst).toList() : data;
+          return processedData.map((json) => NewsArticle.fromJson(json)).toList();
+        }
+        
+        throw '${response.statusCode} - ${response.body}';
+      } else {
+        throw '${response.statusCode} - ${response.body}';
+      }
+    } catch (e) {
+      LogService.log('Error fetching category news: $e', category: 'news_error');
+      throw e;
+    }
+  }
 }

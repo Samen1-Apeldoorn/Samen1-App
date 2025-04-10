@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'screens/news_page.dart'; 
+import 'screens/news_container.dart'; // Update the import
 import 'screens/radio_page.dart';
 import 'screens/tv_page.dart';
 import 'screens/settings_page.dart';
@@ -117,9 +117,9 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _currentIndex = 0;
   
-  // Define page data in one place for better maintenance
+  // Update to use NewsContainer instead of NewsPage
   final List<({String name, Widget page, IconData icon})> _pageData = const [
-    (name: 'Nieuws', page: NewsPage(), icon: Icons.newspaper),
+    (name: 'Nieuws', page: NewsContainer(), icon: Icons.newspaper),
     (name: 'Radio', page: RadioPage(), icon: Icons.radio),
     (name: 'TV', page: TVPage(), icon: Icons.tv),
     (name: 'Instellingen', page: SettingsPage(), icon: Icons.settings),

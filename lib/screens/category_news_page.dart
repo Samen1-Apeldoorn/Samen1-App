@@ -6,19 +6,23 @@ import '../services/log_service.dart';
 import '../services/news_service.dart';
 import 'news_article_screen.dart';
 
-class NewsPage extends StatefulWidget {
+class CategoryNewsPage extends StatefulWidget {
+  final String title;
+  final int categoryId;
   final bool isInContainer;
-  
-  const NewsPage({
+
+  const CategoryNewsPage({
     super.key, 
-    this.isInContainer = false,
+    required this.title,
+    required this.categoryId,
+    this.isInContainer = true,
   });
 
   @override
-  State<NewsPage> createState() => _NewsPageState();
+  State<CategoryNewsPage> createState() => _CategoryNewsPageState();
 }
 
-class _NewsPageState extends State<NewsPage> {
+class _CategoryNewsPageState extends State<CategoryNewsPage> {
   final List<NewsArticle> _articles = [];
   List<NewsArticle> _preloadedArticles = [];
   bool _isLoading = false;
@@ -27,30 +31,33 @@ class _NewsPageState extends State<NewsPage> {
   bool _hasMoreArticles = true;
   int _currentPage = 1;
   final ScrollController _scrollController = ScrollController();
-// Add debounce timer to prevent multiple rapid requests
   DateTime _lastLoadTime = DateTime.now();
   bool _loadingTriggered = false;
   static const int _initialLoadCount = 6;
   static const int _fullPageCount = 15;
   bool _loadingRemainingArticles = false;
+  bool _isDisposed = false;  // Track if widget is disposed
 
   @override
   void initState() {
     super.initState();
     _loadInitialNews();
     _scrollController.addListener(_scrollListener);
-    LogService.log('News page opened', category: 'news');
+    LogService.log('Category page opened: ${widget.title}', category: 'news');
   }
 
   @override
   void dispose() {
+    _isDisposed = true;  // Mark as disposed
     _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
     super.dispose();
   }
 
-// Improved scroll listener with debouncing
+  // Scroll listener with debouncing
   void _scrollListener() {
+    if (!mounted || _isDisposed) return;  // Early return if not mounted
+    
     final scrollThreshold = 0.8 * _scrollController.position.maxScrollExtent;
     
     // Check if we should preload next page (when 80% through the list)
@@ -75,47 +82,54 @@ class _NewsPageState extends State<NewsPage> {
         
         // Use Future.delayed to slightly defer loading to prevent janky scrolling
         Future.delayed(const Duration(milliseconds: 100), () {
-          if (mounted) _loadNews();
+          if (mounted && !_isDisposed) _loadNews();
         });
       }
     }
   }
 
   Future<void> _preloadNextPage() async {
-    if (_isPreloading || !_hasMoreArticles) return;
+    if (_isPreloading || !_hasMoreArticles || !mounted || _isDisposed) return;
     
     _isPreloading = true;
-    LogService.log('Preloading news page ${_currentPage + 1}', category: 'news');
+    LogService.log('Preloading category news page ${_currentPage + 1}', category: 'news');
     
     try {
-      // Use 15 articles per page instead of 11
-      final articles = await NewsService.getNews(page: _currentPage + 1, perPage: 15);
+      // Use the category-specific method to fetch news
+      final articles = await NewsService.getNewsByCategory(
+        categoryId: widget.categoryId,
+        page: _currentPage + 1, 
+        perPage: 15
+      );
       
-      if (mounted) {
-        if (articles.isEmpty) {
-          _hasMoreArticles = false;
-        } else {
-          _preloadedArticles = articles;
-          LogService.log('Successfully preloaded ${articles.length} articles for page ${_currentPage + 1}', 
-              category: 'news');
-        }
+      if (!mounted || _isDisposed) return;  // Check again after async operation
+      
+      if (articles.isEmpty) {
+        _hasMoreArticles = false;
+      } else {
+        _preloadedArticles = articles;
+        LogService.log('Successfully preloaded ${articles.length} articles for page ${_currentPage + 1}', 
+            category: 'news');
       }
     } catch (e) {
-      LogService.log('Failed to preload news page ${_currentPage + 1}: $e', category: 'news_error');
+      LogService.log('Failed to preload category news page ${_currentPage + 1}: $e', category: 'news_error');
     } finally {
-      if (mounted) {
-        _isPreloading = false;
+      if (mounted && !_isDisposed) {
+        setState(() {
+          _isPreloading = false;
+        });
       }
     }
   }
 
-// Improved loading with better state management
+  // Load news articles
   Future<void> _loadNews() async {
-    if (_isLoading || !_hasMoreArticles) return;
+    if (_isLoading || !_hasMoreArticles || !mounted || _isDisposed) return;
     
     _lastLoadTime = DateTime.now();
     _loadingTriggered = false;
     
+    if (!mounted || _isDisposed) return;  // Double check
     setState(() {
       _isLoading = true;
     });
@@ -129,37 +143,37 @@ class _NewsPageState extends State<NewsPage> {
         articles = _preloadedArticles;
         _preloadedArticles = [];
       } else {
-        // Otherwise load from API (15 articles per page instead of 11)
+        // Otherwise load from API using the category-specific method
         LogService.log('Loading page $_currentPage directly', category: 'news');
-        articles = await NewsService.getNews(page: _currentPage, perPage: 15);
+        articles = await NewsService.getNewsByCategory(
+          categoryId: widget.categoryId,
+          page: _currentPage, 
+          perPage: 15
+        );
       }
+      
+      if (!mounted || _isDisposed) return;  // Check again after async operation
       
       if (articles.isEmpty && _currentPage == 1) {
         LogService.log('No articles found on first page', category: 'news_warning');
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _hasError = true;
-          });
-        }
+        setState(() {
+          _isLoading = false;
+          _hasError = true;
+        });
         return;
       } else if (articles.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _hasMoreArticles = false;
-          });
-        }
+        setState(() {
+          _isLoading = false;
+          _hasMoreArticles = false;
+        });
         return;
       }
       
-      if (mounted) {
-        setState(() {
-          _articles.addAll(articles);
-          _isLoading = false;
-          _currentPage++;
-        });
-      }
+      setState(() {
+        _articles.addAll(articles);
+        _isLoading = false;
+        _currentPage++;
+      });
 
       // Start preloading next page immediately after current page is loaded
       if (_hasMoreArticles && _preloadedArticles.isEmpty) {
@@ -168,86 +182,105 @@ class _NewsPageState extends State<NewsPage> {
       
       LogService.log('Loaded ${articles.length} articles. Total: ${_articles.length}', category: 'news');
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _hasError = _articles.isEmpty;
-        });
-      }
+      if (!mounted || _isDisposed) return;  // Check again after async error
+      
+      setState(() {
+        _isLoading = false;
+        _hasError = _articles.isEmpty;
+      });
+      
       LogService.log('Failed to load news: $e', category: 'news_error');
     }
   }
 
   Future<void> _loadInitialNews() async {
-    if (_isLoading || !_hasMoreArticles) return;
+    if (_isLoading || !_hasMoreArticles || !mounted || _isDisposed) return;
     
     setState(() {
       _isLoading = true;
     });
 
     try {
-      // Load initial batch of articles
-      final articles = await NewsService.getNews(page: _currentPage, perPage: _initialLoadCount);
+      // Load initial batch of articles using the category-specific method
+      final articles = await NewsService.getNewsByCategory(
+        categoryId: widget.categoryId,
+        page: _currentPage, 
+        perPage: _initialLoadCount
+      );
       
-      if (mounted) {
-        setState(() {
-          _articles.addAll(articles);
-          _isLoading = false;
-          if (articles.isEmpty) {
-            _hasError = _currentPage == 1;
-            _hasMoreArticles = false;
-          }
-        });
-        
-        // Load remaining articles for the current page in the background
+      if (!mounted || _isDisposed) return;  // Check again after async operation
+      
+      setState(() {
+        _articles.addAll(articles);
+        _isLoading = false;
+        if (articles.isEmpty) {
+          _hasError = _currentPage == 1;
+          _hasMoreArticles = false;
+        }
+      });
+      
+      // Load remaining articles for the current page in the background
+      if (mounted && !_isDisposed) {
         _loadRemainingArticles();
       }
     } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _hasError = _articles.isEmpty;
-        });
-      }
+      if (!mounted || _isDisposed) return;  // Check again after async error
+      
+      setState(() {
+        _isLoading = false;
+        _hasError = _articles.isEmpty;
+      });
+      
       LogService.log('Failed to load initial news: $e', category: 'news_error');
     }
   }
 
   Future<void> _loadRemainingArticles() async {
-    if (_loadingRemainingArticles) return;
+    if (_loadingRemainingArticles || !mounted || _isDisposed) return;
     
     _loadingRemainingArticles = true;
     LogService.log('Loading remaining articles for current page', category: 'news');
     
     try {
-      final remainingArticles = await NewsService.getNews(
+      final remainingArticles = await NewsService.getNewsByCategory(
+        categoryId: widget.categoryId,
         page: _currentPage,
         perPage: _fullPageCount,
         skipFirst: _initialLoadCount
       );
       
-      if (mounted) {
-        setState(() {
-          _articles.addAll(remainingArticles);
-          _loadingRemainingArticles = false;
-        });
+      if (!mounted || _isDisposed) {
+        // Critical check - this is where the error was happening
+        LogService.log('Widget disposed before remaining articles loaded', category: 'news');
+        return;
+      }
+      
+      setState(() {
+        _articles.addAll(remainingArticles);
+        _loadingRemainingArticles = false;
+      });
+      
+      // Start preloading next page after loading remaining articles
+      if (_hasMoreArticles && _preloadedArticles.isEmpty && mounted && !_isDisposed) {
+        await _preloadNextPage();
         
-        // Start preloading next page after loading remaining articles
-        // Alleen increment currentPage nadat we de preload zijn gestart
-        if (_hasMoreArticles && _preloadedArticles.isEmpty) {
-          await _preloadNextPage();
+        if (mounted && !_isDisposed) {
           setState(() {
             _currentPage++;
           });
         }
       }
     } catch (e) {
-      _loadingRemainingArticles = false;
+      if (mounted && !_isDisposed) {
+        _loadingRemainingArticles = false;
+      }
       LogService.log('Failed to load remaining articles: $e', category: 'news_error');
     }
   }
 
   Future<void> _refreshNews() async {
+    if (!mounted || _isDisposed) return;
+    
     setState(() {
       _articles.clear();
       _preloadedArticles.clear();
@@ -257,6 +290,7 @@ class _NewsPageState extends State<NewsPage> {
       _loadingTriggered = false;
       _loadingRemainingArticles = false;
     });
+    
     await _loadInitialNews();
   }
 
@@ -266,9 +300,9 @@ class _NewsPageState extends State<NewsPage> {
       appBar: widget.isInContainer ? null : PreferredSize(
         preferredSize: const Size.fromHeight(40.0), // Smaller height
         child: AppBar(
-          title: const Text(
-            'Nieuws',
-            style: TextStyle(fontSize: 16.0), // Smaller text
+          title: Text(
+            widget.title,
+            style: const TextStyle(fontSize: 16.0), // Smaller text
           ),
           backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Colors.white,
@@ -315,8 +349,8 @@ class _NewsPageState extends State<NewsPage> {
           children: [
             Icon(Icons.article_outlined, size: NewsStyles.infoIconSize, color: NewsStyles.infoIconColor),
             NewsStyles.largeSpaceVertical,
-            const Text(
-              'Geen nieuwsartikelen gevonden.\nProbeer het later nog eens.',
+            Text(
+              'Geen artikelen gevonden in ${widget.title}.\nProbeer het later nog eens.',
               textAlign: TextAlign.center,
             ),
           ],
@@ -329,7 +363,7 @@ class _NewsPageState extends State<NewsPage> {
       padding: EdgeInsets.zero, // Remove default ListView padding
       children: [
         // Featured article - no padding, full width
-        _buildFeaturedArticle(_articles.first),
+        if (_articles.isNotEmpty) _buildFeaturedArticle(_articles.first),
         NewsStyles.largeSpaceVertical,
         if (_articles.length > 1)
           Padding(
@@ -449,24 +483,19 @@ class _NewsPageState extends State<NewsPage> {
     return GestureDetector(
       onTap: () => _openArticle(article),
       child: Container(
-        // Use min height constraint but allow it to grow for longer titles
         constraints: BoxConstraints(
           minHeight: NewsStyles.horizontalArticleHeight,
         ),
-        padding: EdgeInsets.zero, // Remove any container padding
-        margin: const EdgeInsets.symmetric(horizontal: 2.0), // Add small margin instead of padding
+        padding: EdgeInsets.zero,
+        margin: const EdgeInsets.symmetric(horizontal: 2.0),
         decoration: NewsStyles.horizontalItemDecoration,
         clipBehavior: Clip.antiAlias,
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Left side - Image with NO border radius on left
             if (article.imageUrl.isNotEmpty)
               ClipRRect(
-                // Only apply border radius to right side corners
                 borderRadius: const BorderRadius.only(
-                  topRight: Radius.circular(0),
-                  bottomRight: Radius.circular(0),
                   topLeft: Radius.circular(8),
                   bottomLeft: Radius.circular(8),
                 ),
@@ -493,14 +522,12 @@ class _NewsPageState extends State<NewsPage> {
                   ),
                 ),
               ),
-            // Right side - Content with slightly more space
             Expanded(
               child: Padding(
                 padding: NewsStyles.horizontalArticleTextPadding,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Category and date row
                     Row(
                       children: [
                         Text(
@@ -508,9 +535,12 @@ class _NewsPageState extends State<NewsPage> {
                           style: NewsStyles.categoryLabelGrid,
                         ),
                         NewsStyles.smallSpaceHorizontal,
-                        Text(
+                        const Text(
                           "•",
-                          style: NewsStyles.separatorStyle,
+                          style: TextStyle(
+                            fontSize: 10,
+                            color: Colors.grey,
+                          ),
                         ),
                         NewsStyles.smallSpaceHorizontal,
                         Text(
@@ -520,14 +550,13 @@ class _NewsPageState extends State<NewsPage> {
                       ],
                     ),
                     NewsStyles.smallSpaceVertical,
-                    // Title with more space for longer titles
                     Text(
                       article.title,
                       style: NewsStyles.horizontalTitleStyle,
-                      maxLines: 3, // Explicitly allow 3 lines
+                      maxLines: 3,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    const SizedBox(height: 10), // More bottom spacing to ensure content fits
+                    const SizedBox(height: 10),
                   ],
                 ),
               ),
@@ -539,6 +568,8 @@ class _NewsPageState extends State<NewsPage> {
   }
 
   void _openArticle(NewsArticle article) {
+    if (!mounted || _isDisposed) return;
+    
     Navigator.push(
       context,
       MaterialPageRoute(
