@@ -159,7 +159,14 @@ class RSSService {
       .replaceAll('&ldquo;', '"')
       .replaceAll('&ndash;', '–')
       .replaceAll('&mdash;', '—')
-      .replaceAll('&#39;', "'");
+      .replaceAll('&#39;', "'")
+      // Add more entity replacements for better text quality
+      .replaceAll('&#038;', '&')
+      .replaceAll('&#8211;', '–')
+      .replaceAll('&#8212;', '—')
+      .replaceAll('&#8230;', '...')  // ellipsis
+      .replaceAll('&#8226;', '•')    // bullet point
+      .replaceAll('&#160;', ' ');    // non-breaking space
     
     // For any remaining HTML entities, try to decode them
     try {
