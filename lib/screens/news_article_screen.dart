@@ -13,78 +13,81 @@ class NewsArticleScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      extendBodyBehindAppBar: true,
+      extendBodyBehindAppBar: true,  // Zorgt ervoor dat de body achter de app bar wordt weergegeven
       appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: Colors.white),
+        backgroundColor: Colors.transparent,  // Maak de achtergrond van de app bar transparant
+        elevation: 0,  // Verwijdert de schaduw van de app bar
+        iconTheme: const IconThemeData(color: Colors.white),  // Zet de kleur van de iconen in de app bar naar wit
         leading: IconButton(
           icon: Container(
-            padding: NewsStyles.smallPadding,
-            decoration: NewsStyles.backButtonContainer,
+            padding: NewsStyles.smallPadding,  // Kleinere padding rondom de knop
+            decoration: NewsStyles.backButtonContainer,  // Achtergronddecoratie voor de knop
             child: const Center(
-              child: Icon(Icons.arrow_back, size: 20),
+              child: Icon(Icons.arrow_back, size: 20),  // Pijl-icoon voor de terugknop
             ),
           ),
-          onPressed: () => Navigator.of(context).pop(),
+          onPressed: () => Navigator.of(context).pop(),  // Ga terug naar de vorige pagina wanneer geklikt
         ),
       ),
       body: SingleChildScrollView(
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.start,  // Zorg ervoor dat de inhoud links begint
           children: [
+            // Als er een afbeelding is, laat die dan zien
             if (article.imageUrl.isNotEmpty)
               Stack(
                 children: [
                   SizedBox(
-                    width: double.infinity,
-                    height: NewsStyles.articleImageHeight,
+                    width: double.infinity,  // Breedte van de afbeelding is gelijk aan het scherm
+                    height: NewsStyles.articleImageHeight,  // Specifieke hoogte van de afbeelding
                     child: CachedNetworkImage(
                       imageUrl: article.imageUrl,
                       width: double.infinity,
                       height: NewsStyles.articleImageHeight,
-                      fit: BoxFit.cover,
-                      alignment: Alignment.center, // Center the image content
+                      fit: BoxFit.cover,  // Zorg ervoor dat de afbeelding de ruimte vult
+                      alignment: Alignment.center,  // Centreer de afbeelding in de beschikbare ruimte
                       placeholder: (context, url) => Container(
                         height: NewsStyles.articleImageHeight,
-                        color: NewsStyles.placeholderColor,
+                        color: NewsStyles.placeholderColor,  // Vervang de afbeelding door een placeholder
                         child: const Center(child: CircularProgressIndicator()),
                       ),
                       errorWidget: (context, url, error) => Container(
                         height: NewsStyles.articleImageHeight,
                         color: NewsStyles.placeholderColor,
-                        child: const Icon(Icons.error, size: 40),
+                        child: const Icon(Icons.error, size: 40),  // Toon een fouticoon bij een probleem
                       ),
                     ),
                   ),
+                  // Overlays de titel van het artikel boven de afbeelding
                   Positioned(
                     bottom: 0,
                     left: 0,
                     right: 0,
                     child: Container(
-                      padding: NewsStyles.defaultPadding,
-                      decoration: NewsStyles.gradientOverlay,
+                      padding: NewsStyles.defaultPadding,  // Standaard padding rondom de titel
+                      decoration: NewsStyles.gradientOverlay,  // Zorgt voor een transparante overlay met een gradient
                       child: Text(
                         article.title,
-                        style: NewsStyles.titleStyle,
-                        maxLines: 3,
-                        overflow: TextOverflow.ellipsis,
+                        style: NewsStyles.titleStyle,  // Pas de stijl van de titel aan
+                        maxLines: 3,  // Beperk het aantal regels van de titel
+                        overflow: TextOverflow.ellipsis,  // Voeg '...' toe als de titel te lang is
                       ),
                     ),
                   ),
                 ],
               ),
             
+            // Toon de metadata als de afbeelding beschikbaar is
             if (article.imageUrl.isNotEmpty)
               Container(
-                width: double.infinity,
-                margin: EdgeInsets.zero, // Remove margin to eliminate the white gap
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                width: double.infinity,  // Maak de container zo breed als het scherm
+                margin: EdgeInsets.zero,  // Verwijder de marge om ongewenste witte ruimte te elimineren
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),  // Padding rondom de metadata
                 decoration: BoxDecoration(
-                  color: NewsStyles.backgroundGreyColor,
+                  color: NewsStyles.backgroundGreyColor,  // Achtergrondkleur voor de metadata
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.start,  // Zorg ervoor dat de elementen links uitgelijnd zijn
                   children: [
                     Text(
                       article.category,
@@ -97,7 +100,7 @@ class NewsArticleScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      "•",
+                      "•",  // Een separator
                       style: const TextStyle(
                         fontSize: 11,
                         color: Colors.black87,
@@ -106,7 +109,7 @@ class NewsArticleScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: 4),
                     Text(
-                      _formatDate(article.date),
+                      _formatDate(article.date),  // Formatteer de datum
                       style: const TextStyle(
                         fontSize: 11,
                         color: Color(0xFF757575),
@@ -129,39 +132,41 @@ class NewsArticleScreen extends StatelessWidget {
                 ),
               ),
             
+            // Hoofdinhoud van het artikel
             Padding(
-              padding: NewsStyles.defaultPadding,
+              padding: EdgeInsets.all(16.0),  // Gebruik standaard padding voor het artikel
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  // Als er geen afbeelding is, toon dan alleen de titel en metadata
                   if (article.imageUrl.isEmpty) ...[
                     Text(
                       article.title,
-                      style: NewsStyles.articleTitleStyle,
+                      style: NewsStyles.articleTitleStyle,  // Stijl de titel
                     ),
                     NewsStyles.smallSpaceVertical,
                     Row(
                       children: [
                         Text(
                           article.category,
-                          style: NewsStyles.categoryLabelDark,
+                          style: NewsStyles.categoryLabelDark,  // Stijl voor de categorie
                         ),
                         NewsStyles.mediumSpaceHorizontal,
                         Text(
-                          "•",
+                          "•",  // Separator
                           style: NewsStyles.separatorStyle,
                         ),
                         NewsStyles.mediumSpaceHorizontal,
                         Text(
-                          _formatDate(article.date),
-                          style: NewsStyles.articleDateStyle,
+                          _formatDate(article.date),  // Geformatteerde datum
+                          style: NewsStyles.articleDateStyle,  // Stijl voor de datum
                         ),
                       ],
                     ),
-                    NewsStyles.largeSpaceVertical,
+                    NewsStyles.largeSpaceVertical,  // Voeg ruimte toe tussen de metadata en de content
                   ],
-                  _buildArticleContent(article.content, context),
-                  NewsStyles.largeSpaceVertical,
+                  _buildArticleContent(article.content, context),  // Bouw de content van het artikel op
+                  NewsStyles.largeSpaceVertical,  // Extra ruimte onderaan
                 ],
               ),
             ),
@@ -171,52 +176,52 @@ class NewsArticleScreen extends StatelessWidget {
     );
   }
 
+  // Functie om de datum te formatteren
   String _formatDate(String dateString) {
     try {
-      final date = DateTime.parse(dateString);
-      return DateFormat('d MMMM yyyy').format(date);
+      final date = DateTime.parse(dateString);  // Zet de datum om naar een DateTime-object
+      return DateFormat('d MMMM yyyy').format(date);  // Format de datum naar het gewenste formaat
     } catch (e) {
-      return dateString;
+      return dateString;  // Als er iets misgaat, retourneer de originele string
     }
   }
 
+  // Functie om de HTML content van het artikel weer te geven
   Widget _buildArticleContent(String htmlContent, BuildContext context) {
-    final screenWidth = MediaQuery.of(context).size.width - 32.0; // Account for padding
-    // Calculate height based on a 16:9 aspect ratio
+    final screenWidth = (MediaQuery.of(context).size.width - NewsStyles.htmlCaptionPadding * 2) * 0.92;
+    // Bereken de hoogte van de afbeelding op basis van een 16:9 verhouding
     final imageHeight = screenWidth * (9/16);
     
     return Html(
-      data: htmlContent,
+      data: htmlContent,  // De HTML content die je wilt renderen
       style: {
         "body": Style(
-          fontSize: FontSize(NewsStyles.htmlBodyFontSize),
+          fontSize: FontSize(NewsStyles.htmlBodyFontSize),  // Stel de lettergrootte in voor de tekst
           fontWeight: FontWeight.normal,
           color: Colors.black87,
           lineHeight: LineHeight(NewsStyles.htmlLineHeight),
         ),
-        "p": Style(
-          margin: Margins.only(bottom: NewsStyles.htmlMarginBottom),
+        "p": Style(  // Stijl voor paragraaf
+          margin: Margins.only(bottom: NewsStyles.htmlMarginBottom),  // Ruimte onder elke paragraaf
         ),
-        "strong": Style(
+        "strong": Style(  // Stijl voor vetgedrukte tekst
           fontWeight: FontWeight.bold,
         ),
-        "img": Style(
-          padding: HtmlPaddings.zero,
-          margin: Margins.only(top: 8.0, bottom: 8.0),
-          display: Display.block,
-          width: Width(screenWidth),
-          height: Height(imageHeight),
-          alignment: Alignment.center,
+        "img": Style(  // Stijl voor afbeeldingen
+          width: Width(screenWidth),  // Breedte van de afbeelding gebaseerd op het scherm
+          height: Height(imageHeight),  // Hoogte berekend met de 16:9 verhouding
+          alignment: Alignment.center,  // Centraal uitlijnen van de afbeelding
         ),
         "figure": Style(
           margin: Margins.symmetric(vertical: NewsStyles.htmlFigureMargin),
           display: Display.block,
         ),
-        "figcaption": Style(
+        "figcaption": Style(  // Stijl voor bijschriften bij afbeeldingen
           padding: HtmlPaddings.all(NewsStyles.htmlCaptionPadding),
+          width: Width(screenWidth),  // Zorg ervoor dat de bijschriften net iets smaller zijn dan de afbeelding
           fontSize: FontSize(NewsStyles.htmlCaptionFontSize),
           color: Colors.grey,
-          textAlign: TextAlign.center,
+          textAlign: TextAlign.center,  // Centreer de bijschriften
           backgroundColor: NewsStyles.backgroundGreyColor,
         ),
       },
