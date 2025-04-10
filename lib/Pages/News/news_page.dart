@@ -33,11 +33,6 @@ class _NewsPageState extends State<NewsPage> {
   static const int _initialLoadCount = 6;
   static const int _fullPageCount = 15;
   bool _loadingRemainingArticles = false;
-  bool _isDisposed = false;  // Add this to track disposal state
-  
-  // Add preload cooldown to prevent excessive preloading
-  DateTime _lastPreloadTime = DateTime.now().subtract(const Duration(minutes: 5));
-  static const Duration _preloadCooldown = Duration(seconds: 5);
 
   @override
   void initState() {
@@ -49,7 +44,6 @@ class _NewsPageState extends State<NewsPage> {
 
   @override
   void dispose() {
-    _isDisposed = true;  // Mark as disposed to prevent callbacks after disposal
     _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
     super.dispose();
@@ -57,23 +51,14 @@ class _NewsPageState extends State<NewsPage> {
 
 // Improved scroll listener with debouncing
   void _scrollListener() {
-    if (!mounted || _isDisposed) return;  // Early return if not mounted
+    final scrollThreshold = 0.8 * _scrollController.position.maxScrollExtent;
     
-    // Only preload if we're not already loading and cooldown period has passed
-    final now = DateTime.now();
-    final canPreload = now.difference(_lastPreloadTime) > _preloadCooldown;
-    
-    final scrollThreshold = 0.85 * _scrollController.position.maxScrollExtent;
-    
-    // Check if we should preload next page (when 85% through the list)
+    // Check if we should preload next page (when 80% through the list)
     if (_scrollController.position.pixels >= scrollThreshold && 
         !_isPreloading && 
         !_loadingTriggered && 
         _hasMoreArticles && 
-        _preloadedArticles.isEmpty &&
-        canPreload) {
-      
-      _lastPreloadTime = now;  // Update last preload time
+        _preloadedArticles.isEmpty) {
       _preloadNextPage();
     }
     
@@ -83,21 +68,21 @@ class _NewsPageState extends State<NewsPage> {
       if (!_isLoading && 
           !_loadingTriggered && 
           _hasMoreArticles && 
-          DateTime.now().difference(_lastLoadTime).inMilliseconds > 2000) {  // Increased delay
+          DateTime.now().difference(_lastLoadTime).inMilliseconds > 1500) {
         
         _loadingTriggered = true;
         LogService.log('Nearing end of list, loading more articles', category: 'news');
         
         // Use Future.delayed to slightly defer loading to prevent janky scrolling
-        Future.delayed(const Duration(milliseconds: 250), () {
-          if (mounted && !_isDisposed) _loadNews();
+        Future.delayed(const Duration(milliseconds: 100), () {
+          if (mounted) _loadNews();
         });
       }
     }
   }
 
   Future<void> _preloadNextPage() async {
-    if (_isPreloading || !_hasMoreArticles || !mounted || _isDisposed) return;
+    if (_isPreloading || !_hasMoreArticles) return;
     
     _isPreloading = true;
     LogService.log('Preloading news page ${_currentPage + 1}', category: 'news');
@@ -106,29 +91,27 @@ class _NewsPageState extends State<NewsPage> {
       // Use 15 articles per page instead of 11
       final articles = await NewsService.getNews(page: _currentPage + 1, perPage: 15);
       
-      if (!mounted || _isDisposed) return;  // Check again after async operation
-      
-      if (articles.isEmpty) {
-        _hasMoreArticles = false;
-      } else {
-        _preloadedArticles = articles;
-        LogService.log('Successfully preloaded ${articles.length} articles for page ${_currentPage + 1}', 
-            category: 'news');
+      if (mounted) {
+        if (articles.isEmpty) {
+          _hasMoreArticles = false;
+        } else {
+          _preloadedArticles = articles;
+          LogService.log('Successfully preloaded ${articles.length} articles for page ${_currentPage + 1}', 
+              category: 'news');
+        }
       }
     } catch (e) {
       LogService.log('Failed to preload news page ${_currentPage + 1}: $e', category: 'news_error');
     } finally {
-      if (mounted && !_isDisposed) {
-        setState(() {
-          _isPreloading = false;
-        });
+      if (mounted) {
+        _isPreloading = false;
       }
     }
   }
 
 // Improved loading with better state management
   Future<void> _loadNews() async {
-    if (_isLoading || !_hasMoreArticles || !mounted || _isDisposed) return;
+    if (_isLoading || !_hasMoreArticles) return;
     
     _lastLoadTime = DateTime.now();
     _loadingTriggered = false;
@@ -151,51 +134,52 @@ class _NewsPageState extends State<NewsPage> {
         articles = await NewsService.getNews(page: _currentPage, perPage: 15);
       }
       
-      if (!mounted || _isDisposed) return;  // Check again after async operation
-      
       if (articles.isEmpty && _currentPage == 1) {
         LogService.log('No articles found on first page', category: 'news_warning');
-        setState(() {
-          _isLoading = false;
-          _hasError = true;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _hasError = true;
+          });
+        }
         return;
       } else if (articles.isEmpty) {
-        setState(() {
-          _isLoading = false;
-          _hasMoreArticles = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _hasMoreArticles = false;
+          });
+        }
         return;
       }
       
-      setState(() {
-        _articles.addAll(articles);
-        _isLoading = false;
-        _currentPage++;
-      });
+      if (mounted) {
+        setState(() {
+          _articles.addAll(articles);
+          _isLoading = false;
+          _currentPage++;
+        });
+      }
 
       // Start preloading next page immediately after current page is loaded
       if (_hasMoreArticles && _preloadedArticles.isEmpty) {
-        Future.delayed(const Duration(seconds: 2), () {
-          if (mounted && !_isDisposed) _preloadNextPage();
-        });
+        _preloadNextPage();
       }
       
       LogService.log('Loaded ${articles.length} articles. Total: ${_articles.length}', category: 'news');
     } catch (e) {
-      if (!mounted || _isDisposed) return;  // Check again after async error
-      
-      setState(() {
-        _isLoading = false;
-        _hasError = _articles.isEmpty;
-      });
-      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = _articles.isEmpty;
+        });
+      }
       LogService.log('Failed to load news: $e', category: 'news_error');
     }
   }
 
   Future<void> _loadInitialNews() async {
-    if (_isLoading || !_hasMoreArticles || !mounted || _isDisposed) return;
+    if (_isLoading || !_hasMoreArticles) return;
     
     setState(() {
       _isLoading = true;
@@ -205,37 +189,32 @@ class _NewsPageState extends State<NewsPage> {
       // Load initial batch of articles
       final articles = await NewsService.getNews(page: _currentPage, perPage: _initialLoadCount);
       
-      if (!mounted || _isDisposed) return;  // Check again after async operation
-      
-      setState(() {
-        _articles.addAll(articles);
-        _isLoading = false;
-        if (articles.isEmpty) {
-          _hasError = _currentPage == 1;
-          _hasMoreArticles = false;
-        }
-      });
-      
-      // Load remaining articles for the current page in the background
-      if (mounted && !_isDisposed) {
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted && !_isDisposed) _loadRemainingArticles();
+      if (mounted) {
+        setState(() {
+          _articles.addAll(articles);
+          _isLoading = false;
+          if (articles.isEmpty) {
+            _hasError = _currentPage == 1;
+            _hasMoreArticles = false;
+          }
         });
+        
+        // Load remaining articles for the current page in the background
+        _loadRemainingArticles();
       }
     } catch (e) {
-      if (!mounted || _isDisposed) return;  // Check again after async error
-      
-      setState(() {
-        _isLoading = false;
-        _hasError = _articles.isEmpty;
-      });
-      
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = _articles.isEmpty;
+        });
+      }
       LogService.log('Failed to load initial news: $e', category: 'news_error');
     }
   }
 
   Future<void> _loadRemainingArticles() async {
-    if (_loadingRemainingArticles || !mounted || _isDisposed) return;
+    if (_loadingRemainingArticles) return;
     
     _loadingRemainingArticles = true;
     LogService.log('Loading remaining articles for current page', category: 'news');
@@ -247,41 +226,28 @@ class _NewsPageState extends State<NewsPage> {
         skipFirst: _initialLoadCount
       );
       
-      if (!mounted || _isDisposed) return;  // Check again after async operation
-      
-      setState(() {
-        _articles.addAll(remainingArticles);
-        _loadingRemainingArticles = false;
-      });
-      
-      // Delay further loading to reduce API pressure
-      Future.delayed(const Duration(seconds: 2), () {
-        if (!mounted || _isDisposed) return;
-        
-        // Start preloading next page after loading remaining articles
-        if (_hasMoreArticles && _preloadedArticles.isEmpty) {
-          _preloadNextPage().then((_) {
-            if (mounted && !_isDisposed) {
-              setState(() {
-                _currentPage++;
-              });
-            }
-          });
-        }
-      });
-    } catch (e) {
-      if (mounted && !_isDisposed) {
+      if (mounted) {
         setState(() {
+          _articles.addAll(remainingArticles);
           _loadingRemainingArticles = false;
         });
+        
+        // Start preloading next page after loading remaining articles
+        // Alleen increment currentPage nadat we de preload zijn gestart
+        if (_hasMoreArticles && _preloadedArticles.isEmpty) {
+          await _preloadNextPage();
+          setState(() {
+            _currentPage++;
+          });
+        }
       }
+    } catch (e) {
+      _loadingRemainingArticles = false;
       LogService.log('Failed to load remaining articles: $e', category: 'news_error');
     }
   }
 
   Future<void> _refreshNews() async {
-    if (!mounted || _isDisposed) return;
-    
     setState(() {
       _articles.clear();
       _preloadedArticles.clear();
@@ -291,46 +257,7 @@ class _NewsPageState extends State<NewsPage> {
       _loadingTriggered = false;
       _loadingRemainingArticles = false;
     });
-    
-    // Force bypass cache on refresh
-    try {
-      setState(() {
-        _isLoading = true;
-      });
-      
-      final articles = await NewsService.getNews(
-        page: _currentPage, 
-        perPage: _initialLoadCount,
-        bypassCache: true
-      );
-      
-      if (!mounted || _isDisposed) return;
-      
-      setState(() {
-        _articles.addAll(articles);
-        _isLoading = false;
-        if (articles.isEmpty) {
-          _hasError = true;
-          _hasMoreArticles = false;
-        }
-      });
-      
-      // Load remaining articles after a delay
-      if (mounted && !_isDisposed && articles.isNotEmpty) {
-        Future.delayed(const Duration(seconds: 1), () {
-          if (mounted && !_isDisposed) _loadRemainingArticles();
-        });
-      }
-    } catch (e) {
-      if (!mounted || _isDisposed) return;
-      
-      setState(() {
-        _isLoading = false;
-        _hasError = _articles.isEmpty;
-      });
-      
-      LogService.log('Failed to refresh news: $e', category: 'news_error');
-    }
+    await _loadInitialNews();
   }
 
   @override
