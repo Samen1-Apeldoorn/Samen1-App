@@ -6,6 +6,7 @@ import '../services/notification_service.dart';
 import '../services/log_service.dart';
 import '../services/discord_service.dart';
 import '../services/version_service.dart';
+import '../services/audio_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -16,45 +17,136 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _notificationsEnabled = false;
+  final AudioService _audioService = AudioService(); // Use the singleton AudioService
+  bool _isRadioPlaying = false;
   final List<String> _categories = ["Regio", "112", "Gemeente", "Politiek", "Evenementen", "Cultuur"];
   List<String> _enabledCategories = [];
 
   @override
   void initState() {
     super.initState();
-    LogService.log('Settings page opened', category: 'settings');
+    LogService.log('SettingsPage: Page opened', category: 'settings');
     _loadSettings();
+    _checkRadioStatus();
   }
 
-  Future<void> _loadSettings() async {
-    LogService.log('Loading settings', category: 'settings');
-    final prefs = await SharedPreferences.getInstance();
-    setState(() {
-      _notificationsEnabled = prefs.getBool('notifications_enabled') ?? false;
-      _enabledCategories = prefs.getStringList('enabled_categories') ?? _categories.toList();
+  void _checkRadioStatus() {
+    LogService.log('SettingsPage: Checking radio playback status', category: 'settings_detail');
+    // This checks if the radio is playing in the background
+    _audioService.player.playerStateStream.listen((state) {
+      LogService.log(
+        'SettingsPage: Radio state update - Playing: ${state.playing}, '
+        'Processing: ${state.processingState}',
+        category: 'settings_detail'
+      );
+      
+      if (mounted) {
+        setState(() {
+          _isRadioPlaying = state.playing;
+        });
+      }
     });
   }
 
-  Future<void> _saveSettings() async {
-    LogService.log(
-      'Saving settings - Notifications: $_notificationsEnabled, Categories: $_enabledCategories', 
-      category: 'settings'
-    );
-    
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setBool('notifications_enabled', _notificationsEnabled);
-    await prefs.setStringList('enabled_categories', _enabledCategories);
-
-    if (_notificationsEnabled) {
-      await Workmanager().registerPeriodicTask(
-        'samen1-rss-check',
-        'checkRSSFeed',
-        frequency: const Duration(minutes: 10),
+  Future<void> _loadSettings() async {
+    try {
+      LogService.log('SettingsPage: Loading user preferences', category: 'settings');
+      final prefs = await SharedPreferences.getInstance();
+      
+      final notificationsEnabled = prefs.getBool('notifications_enabled') ?? false;
+      final enabledCategories = prefs.getStringList('enabled_categories') ?? _categories.toList();
+      
+      LogService.log(
+        'SettingsPage: Loaded preferences - Notifications: $notificationsEnabled, '
+        'Categories: ${enabledCategories.join(", ")}',
+        category: 'settings'
       );
-      LogService.log('Background task registered with 10 minute interval', category: 'settings');
-    } else {
-      await Workmanager().cancelByUniqueName('samen1-rss-check');
-      LogService.log('Background task cancelled', category: 'settings');
+      
+      setState(() {
+        _notificationsEnabled = notificationsEnabled;
+        _enabledCategories = enabledCategories;
+      });
+    } catch (e, stack) {
+      LogService.log(
+        'SettingsPage: Error loading settings: $e\n$stack', 
+        category: 'settings_error'
+      );
+      // If there's an error, use default values
+      setState(() {
+        _notificationsEnabled = false;
+        _enabledCategories = _categories.toList();
+      });
+    }
+  }
+
+  Future<void> _saveSettings() async {
+    try {
+      LogService.log(
+        'SettingsPage: Saving settings - Notifications: $_notificationsEnabled, '
+        'Categories: ${_enabledCategories.join(", ")}', 
+        category: 'settings'
+      );
+      
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('notifications_enabled', _notificationsEnabled);
+      await prefs.setStringList('enabled_categories', _enabledCategories);
+
+      if (_notificationsEnabled) {
+        LogService.log(
+          'SettingsPage: Setting up background tasks with 10 minute interval', 
+          category: 'settings'
+        );
+        
+        await Workmanager().registerPeriodicTask(
+          'samen1-rss-check',
+          'checkRSSFeed',
+          frequency: const Duration(minutes: 10),
+        );
+      } else {
+        LogService.log('SettingsPage: Canceling background tasks', category: 'settings');
+        await Workmanager().cancelByUniqueName('samen1-rss-check');
+      }
+      
+      LogService.log('SettingsPage: Settings saved successfully', category: 'settings');
+    } catch (e, stack) {
+      LogService.log(
+        'SettingsPage: Error saving settings: $e\n$stack', 
+        category: 'settings_error'
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Kon instellingen niet opslaan. Probeer het later opnieuw.'))
+        );
+      }
+    }
+  }
+
+  Future<void> _stopBackgroundRadio() async {
+    try {
+      LogService.log('SettingsPage: Stopping background radio playback', category: 'settings_action');
+      await _audioService.stop();
+      
+      LogService.log('SettingsPage: Background radio stopped successfully', category: 'settings');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Radio is gestopt'))
+        );
+        setState(() {
+          _isRadioPlaying = false;
+        });
+      }
+    } catch (e, stack) {
+      LogService.log(
+        'SettingsPage: Error stopping radio playback: $e\n$stack', 
+        category: 'settings_error'
+      );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Probleem bij het stoppen van de radio'))
+        );
+      }
     }
   }
 
@@ -150,8 +242,9 @@ class _SettingsPageState extends State<SettingsPage> {
   
   Future<void> _submitBugReport(BuildContext context, String description, String email) async {
     if (description.isEmpty) {
+      LogService.log('SettingsPage: Bug report submission canceled - empty description', category: 'settings');
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Geef een beschrijving van het probleem')),
+        const SnackBar(content: Text('Geef een beschrijving van het probleem'))
       );
       return;
     }
@@ -161,9 +254,10 @@ class _SettingsPageState extends State<SettingsPage> {
     String reportText = description;
     if (email.isNotEmpty) {
       reportText = 'Email: $email\n\n$description';
+      LogService.log('SettingsPage: Bug report includes contact email', category: 'settings_detail');
     }
     
-    LogService.log('Submitting bug report', category: 'settings');
+    LogService.log('SettingsPage: Generating and submitting bug report', category: 'settings');
     
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -174,29 +268,47 @@ class _SettingsPageState extends State<SettingsPage> {
       );
     }
     
-    final report = await LogService.generateReport(reportText);
-    final success = await DiscordService.sendBugReport(report);
-    
-    LogService.log(
-      success ? 'Bug report sent successfully' : 'Bug report failed to send',
-      category: 'settings'
-    );
-    
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
-            success 
-              ? 'Bedankt voor je melding! We gaan er mee aan de slag.' 
-              : 'Er ging iets mis bij het versturen. Probeer het later opnieuw.'
-          ),
-          duration: const Duration(seconds: 4),
-          action: success ? null : SnackBarAction(
-            label: 'Opnieuw',
-            onPressed: _showBugReportDialog,
-          ),
-        ),
+    try {
+      final report = await LogService.generateReport(reportText);
+      LogService.log('SettingsPage: Bug report generated successfully', category: 'settings_detail');
+      
+      final success = await DiscordService.sendBugReport(report);
+      
+      LogService.log(
+        success ? 'SettingsPage: Bug report sent successfully' : 'SettingsPage: Bug report failed to send',
+        category: success ? 'settings' : 'settings_error'
       );
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success 
+                ? 'Bedankt voor je melding! We gaan er mee aan de slag.' 
+                : 'Er ging iets mis bij het versturen. Probeer het later opnieuw.'
+            ),
+            duration: const Duration(seconds: 4),
+            action: success ? null : SnackBarAction(
+              label: 'Opnieuw',
+              onPressed: _showBugReportDialog,
+            ),
+          ),
+        );
+      }
+    } catch (e, stack) {
+      LogService.log('SettingsPage: Error submitting bug report: $e\n$stack', category: 'settings_error');
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Er is een probleem opgetreden bij het versturen.'),
+            action: SnackBarAction(
+              label: 'Opnieuw',
+              onPressed: _showBugReportDialog,
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -217,6 +329,7 @@ class _SettingsPageState extends State<SettingsPage> {
               children: [
                 _buildNotificationSettings(),
                 const Divider(),
+                if (_isRadioPlaying) _buildRadioControls(),
                 _buildBugReportTile(),
                 const SizedBox(height: 32),
                 Center(
@@ -233,6 +346,19 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildRadioControls() {
+    return ListTile(
+      leading: const Icon(Icons.radio),
+      title: const Text('Radio speelt af in achtergrond'),
+      subtitle: const Text('Tik om de radio te stoppen'),
+      trailing: IconButton(
+        icon: const Icon(Icons.stop),
+        onPressed: _stopBackgroundRadio,
+      ),
+      onTap: _stopBackgroundRadio,
     );
   }
 

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:workmanager/workmanager.dart';
+import 'package:just_audio_background/just_audio_background.dart';
 import 'screens/news_page.dart'; 
 import 'screens/radio_page.dart';
 import 'screens/tv_page.dart';
@@ -9,6 +10,7 @@ import 'services/notification_service.dart';
 import 'services/rss_service.dart';
 import 'services/log_service.dart';
 import 'services/version_service.dart';
+import 'services/audio_service.dart';
 
 // Global navigation key to use for navigation from outside of widgets
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
@@ -16,6 +18,18 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LogService.log('Application starting', category: 'app_lifecycle');
+  
+  // Initialize just_audio_background
+  await JustAudioBackground.init(
+    androidNotificationChannelId: 'com.example.samen1appv5.channel.audio',
+    androidNotificationChannelName: 'Samen1 Radio',
+    androidNotificationOngoing: true,
+    androidShowNotificationBadge: true,
+  );
+  LogService.log('Audio background service initialized', category: 'initialization');
+  
+  // Pre-initialize the AudioService singleton
+  AudioService();
   
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
   await VersionService.initialize();
