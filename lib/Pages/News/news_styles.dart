@@ -207,7 +207,7 @@ class NewsStyles {
   
   // Image properties
   static const featuredImageHeight = 220.0;
-  static const featuredImageHeightLarge = 260.0; // Added for the +40 height
+  static const featuredImageHeightLarge = 300.0; // Increased from 260.0
   static const articleImageHeight = 300.0;
   static const gridImageHeight = 120.0;
   
