@@ -28,17 +28,6 @@ class AudioService {
       );
     });
     
-    // Log position updates periodically (only when playing)
-    player.positionStream.listen((position) {
-      if (player.playing && position.inSeconds % 30 == 0) {
-        // Log position every 30 seconds to avoid log spam
-        LogService.log(
-          'AudioService: Stream playing at position ${position.inSeconds}s',
-          category: 'audio_position'
-        );
-      }
-    });
-    
     // Log playback exceptions
     player.playbackEventStream.listen((event) {}, 
       onError: (error) {

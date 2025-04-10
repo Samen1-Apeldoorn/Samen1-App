@@ -181,6 +181,10 @@ class NewsArticleScreen extends StatelessWidget {
   }
 
   Widget _buildArticleContent(String htmlContent, BuildContext context) {
+    final screenWidth = MediaQuery.of(context).size.width - 32.0; // Account for padding
+    // Calculate height based on a 16:9 aspect ratio
+    final imageHeight = screenWidth * (9/16);
+    
     return Html(
       data: htmlContent,
       style: {
@@ -200,6 +204,9 @@ class NewsArticleScreen extends StatelessWidget {
           padding: HtmlPaddings.zero,
           margin: Margins.only(top: 8.0, bottom: 8.0),
           display: Display.block,
+          width: Width(screenWidth),
+          height: Height(imageHeight),
+          alignment: Alignment.center,
         ),
         "figure": Style(
           margin: Margins.symmetric(vertical: NewsStyles.htmlFigureMargin),

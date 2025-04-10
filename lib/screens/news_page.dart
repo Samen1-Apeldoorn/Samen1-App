@@ -128,24 +128,30 @@ class _NewsPageState extends State<NewsPage> {
       
       if (articles.isEmpty && _currentPage == 1) {
         LogService.log('No articles found on first page', category: 'news_warning');
-        setState(() {
-          _isLoading = false;
-          _hasError = true;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _hasError = true;
+          });
+        }
         return;
       } else if (articles.isEmpty) {
-        setState(() {
-          _isLoading = false;
-          _hasMoreArticles = false;
-        });
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _hasMoreArticles = false;
+          });
+        }
         return;
       }
       
-      setState(() {
-        _articles.addAll(articles);
-        _isLoading = false;
-        _currentPage++;
-      });
+      if (mounted) {
+        setState(() {
+          _articles.addAll(articles);
+          _isLoading = false;
+          _currentPage++;
+        });
+      }
 
       // Start preloading next page immediately after current page is loaded
       if (_hasMoreArticles && _preloadedArticles.isEmpty) {
@@ -154,10 +160,12 @@ class _NewsPageState extends State<NewsPage> {
       
       LogService.log('Loaded ${articles.length} articles. Total: ${_articles.length}', category: 'news');
     } catch (e) {
-      setState(() {
-        _isLoading = false;
-        _hasError = _articles.isEmpty;
-      });
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+          _hasError = _articles.isEmpty;
+        });
+      }
       LogService.log('Failed to load news: $e', category: 'news_error');
     }
   }
