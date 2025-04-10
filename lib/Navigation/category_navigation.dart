@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/log_service.dart';
-import 'category_news_page.dart';
-import 'news_page.dart';
+import '../Pages/Category/category_news_page.dart';
+import '../Pages/News/news_page.dart';
 
 class CategoryInfo {
   final String name;

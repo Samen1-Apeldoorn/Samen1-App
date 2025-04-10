@@ -1,6 +1,6 @@
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import '../services/log_service.dart';
+import '../../services/log_service.dart';
 
 /// Singleton service to manage a single AudioPlayer instance across the app
 /// just_audio_background only supports a single player instance

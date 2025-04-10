@@ -2,8 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_html/flutter_html.dart';
-import '../styles/news_styles.dart';
-import '../services/news_service.dart';
+import '../Pages/News/news_styles.dart';
+import '../Pages/News/news_service.dart';
 
 class NewsArticleScreen extends StatelessWidget {
   final NewsArticle article;

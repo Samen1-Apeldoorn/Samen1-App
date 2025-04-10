@@ -5,8 +5,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:async';
-import '../services/log_service.dart';
-import '../services/audio_service.dart';
+import '../../services/log_service.dart';
+import 'radio_service.dart';
 
 class RadioPage extends StatefulWidget {
   const RadioPage({super.key});

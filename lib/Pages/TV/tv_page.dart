@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:async';
-import '../services/log_service.dart';
+import '../../services/log_service.dart';
 
 class TVPage extends StatefulWidget {
   const TVPage({super.key});

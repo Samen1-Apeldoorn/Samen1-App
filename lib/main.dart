@@ -2,15 +2,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'screens/news_container.dart'; // Update the import
-import 'screens/radio_page.dart';
-import 'screens/tv_page.dart';
-import 'screens/settings_page.dart';
+import 'Navigation/category_navigation.dart'; // Update the import
+import 'Pages/Radio/radio_page.dart';
+import 'Pages/TV/tv_page.dart';
+import 'Pages/Settings/settings_page.dart';
 import 'services/notification_service.dart';
 import 'services/rss_service.dart';
 import 'services/log_service.dart';
 import 'services/version_service.dart';
-import 'services/audio_service.dart';
+import 'Pages/Radio/radio_service.dart';
 
 // Global navigation key to use for navigation from outside of widgets
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();

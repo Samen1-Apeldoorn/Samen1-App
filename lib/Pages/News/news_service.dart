@@ -1,7 +1,7 @@
 import 'package:html/parser.dart' as htmlparser;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'log_service.dart';
+import '../../services/log_service.dart';
 
 class NewsArticle {
   final int id;

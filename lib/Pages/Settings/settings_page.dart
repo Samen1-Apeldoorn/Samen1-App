@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
-import '../services/rss_service.dart';
-import '../services/notification_service.dart';
-import '../services/log_service.dart';
-import '../services/discord_service.dart';
-import '../services/version_service.dart';
-import '../services/audio_service.dart';
+import '../../services/rss_service.dart';
+import '../../services/notification_service.dart';
+import '../../services/log_service.dart';
+import '../../services/discord_service.dart';
+import '../../services/version_service.dart';
+import '../Radio/radio_service.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
