@@ -190,7 +190,7 @@ class NewsArticleScreen extends StatelessWidget {
   Widget _buildArticleContent(String htmlContent, BuildContext context) {
     final screenWidth = (MediaQuery.of(context).size.width - NewsStyles.htmlCaptionPadding * 2) * 0.92;
     // Bereken de hoogte van de afbeelding op basis van een 16:9 verhouding
-    final imageHeight = screenWidth * (9/16);
+    final imageHeight = screenWidth * (2/3);
     
     return Html(
       data: htmlContent,  // De HTML content die je wilt renderen
