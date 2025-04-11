@@ -1,3 +1,5 @@
+import 'dart:ffi';
+
 import 'package:html/parser.dart' as htmlparser;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -13,6 +15,11 @@ class NewsArticle {
   final String imageUrl;
   final String? imageCaption;
   final String category;
+  final String author;
+
+  static const Map<int, String> predefinedNames = {
+    2: "Serge Poppelaars",
+  };
 
   NewsArticle({
     required this.id,
@@ -24,6 +31,7 @@ class NewsArticle {
     required this.imageUrl,
     this.imageCaption,
     required this.category,
+    required this.author,
   });
   
   // Extract the image sizes from the media object
@@ -109,6 +117,7 @@ class NewsArticle {
           ? htmlparser.parse(media!['caption']['rendered']).body?.text
           : null,
       category: _getCategoryFromClassList(classList),
+      author: predefinedNames[json['author']] ?? 'Onbekend',
     );
   }
 }

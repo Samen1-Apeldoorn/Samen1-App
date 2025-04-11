@@ -127,6 +127,15 @@ class NewsArticleScreen extends StatelessWidget {
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),
+                      Text(
+                        "Door: ${article.author}",  // Auteur van het artikel
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: Colors.black87,
+                          fontWeight: FontWeight.w600,
+                          height: 1.0,
+                        ),
+                      ),
                     ],
                   ],
                 ),
