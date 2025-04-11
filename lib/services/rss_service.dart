@@ -35,22 +35,25 @@ class RSSService {
       final enabledCategories = prefs.getStringList('enabled_categories') ?? [];
       LogService.log('Enabled categories: ${enabledCategories.join(", ")}', category: 'rss');
       
-      // Case-insensitive category check
+      // Case-insensitive category check using the correctly parsed category
       final isEnabled = enabledCategories.any(
         (enabled) => enabled.toLowerCase() == firstItem.category.toLowerCase()
       );
       
       if (!isEnabled) {
         LogService.log('Skipping notification - category ${firstItem.category} is disabled', category: 'rss');
+        // Still update last check time to avoid re-checking the same disabled item
+        await prefs.setString(_lastCheckKey, firstItem.pubDate);
         return '';
       }
       
       if (firstItem.pubDate != lastCheck) {
         LogService.log('New content found, sending notification', category: 'rss');
+        final sanitizedTitle = _sanitizeText(firstItem.title);
         await NotificationService.showNotification(
           title: firstItem.category,
-          body: _sanitizeText(firstItem.title),
-          payload: firstItem.link,
+          body: sanitizedTitle,
+          payload: sanitizedTitle, // Use sanitized title as payload for matching with API articles
           imageUrl: firstItem.imageUrl,
         );
         await prefs.setString(_lastCheckKey, firstItem.pubDate);
@@ -75,10 +78,11 @@ class RSSService {
       }
 
       LogService.log('Sending notification for: ${firstItem.title}', category: 'rss');
+      final sanitizedTitle = _sanitizeText(firstItem.title);
       await NotificationService.showNotification(
-        title: 'Samen1 Nieuws',
-        body: _sanitizeText(firstItem.title),
-        payload: firstItem.link,
+        title: 'Test: ${firstItem.category}', // Include category with test prefix
+        body: sanitizedTitle,
+        payload: sanitizedTitle, // Use sanitized title as payload
         imageUrl: firstItem.imageUrl,
       );
       return '';
@@ -108,7 +112,8 @@ class RSSService {
       final dateRegex = RegExp(r'<pubDate>\s*(.*?)\s*</pubDate>', dotAll: true);
       final imageRegex = RegExp(r'<(media:content|enclosure)[^>]*(?:url|src)="([^"]*)"', dotAll: true);
       final descRegex = RegExp(r'<description><!\[CDATA\[(.*?)\]\]></description>', dotAll: true);
-      final categoryRegex = RegExp(r'<category>\s*(.*?)\s*</category>', dotAll: true);
+      // Updated to handle CDATA tags in category
+      final categoryRegex = RegExp(r'<category>(?:\s*<!\[CDATA\[)?(.*?)(?:\]\]>\s*)?</category>', dotAll: true);
 
       final title = titleRegex.firstMatch(itemContent)?.group(1)?.trim();
       final link = linkRegex.firstMatch(itemContent)?.group(1)?.trim();
@@ -116,7 +121,8 @@ class RSSService {
       final imageMatch = imageRegex.firstMatch(itemContent);
       var imageUrl = imageMatch?.group(2)?.trim();
       final description = descRegex.firstMatch(itemContent)?.group(1)?.trim() ?? '';
-      final category = categoryRegex.firstMatch(itemContent)?.group(1)?.trim() ?? 'Overig';
+      final categoryMatch = categoryRegex.firstMatch(itemContent);
+      final category = categoryMatch?.group(1)?.trim() ?? 'Overig';
       
       // Transform thumbnail URL to full image URL
       if (imageUrl != null && imageUrl.contains('-150x150')) {
@@ -125,14 +131,14 @@ class RSSService {
       }
 
       if (title != null && link != null && pubDate != null) {
-        LogService.log('Successfully parsed RSS item', category: 'rss');
+        LogService.log('Successfully parsed RSS item - Category: $category', category: 'rss');
         return RSSItem(
           title: title,
           link: link,
           pubDate: pubDate,
           description: description,
           imageUrl: imageUrl,
-          category: category,
+          category: category.isEmpty ? 'Overig' : category, // Default to 'Overig' if empty
         );
       }
     }

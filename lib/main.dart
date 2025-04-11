@@ -108,14 +108,19 @@ class MyApp extends StatelessWidget {
 }
 
 class MainScreen extends StatefulWidget {
-  const MainScreen({super.key});
+  final int initialIndex;
+
+  const MainScreen({
+    super.key,
+    this.initialIndex = 0, // Default to news tab
+  });
 
   @override
   State<MainScreen> createState() => _MainScreenState();
 }
 
 class _MainScreenState extends State<MainScreen> {
-  int _currentIndex = 0;
+  late int _currentIndex; // Change from final to late
   
   // Update to use NewsContainer instead of NewsPage
   final List<({String name, Widget page, IconData icon})> _pageData = const [
@@ -128,7 +133,20 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void initState() {
     super.initState();
-    LogService.log('Main screen initialized', category: 'navigation');
+    _currentIndex = widget.initialIndex; // Use initialIndex from widget
+    LogService.log('Main screen initialized at index: $_currentIndex', category: 'navigation');
+  }
+
+  // Add didUpdateWidget to handle updates to initialIndex
+  @override
+  void didUpdateWidget(covariant MainScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.initialIndex != oldWidget.initialIndex) {
+      setState(() {
+        _currentIndex = widget.initialIndex;
+        LogService.log('Main screen index updated to: $_currentIndex', category: 'navigation');
+      });
+    }
   }
 
   void _onTabChanged(int index) {
