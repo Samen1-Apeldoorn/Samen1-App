@@ -114,7 +114,7 @@ class _RadioPageState extends State<RadioPage> {
   void _setupPeriodicStreamInfoUpdates() {
     LogService.log('RadioPage: Setting up periodic stream info updates (30s interval)', category: 'radio');
     _streamInfoTimer?.cancel(); // Cancel previous timer if any
-    _streamInfoTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _streamInfoTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       // Only fetch if player is initialized and page is mounted
       if (_isPlayerInitialized && mounted) {
         LogService.log('RadioPage: Periodic stream info update triggered', category: 'radio_detail');
