@@ -1,5 +1,3 @@
-import 'dart:ffi';
-
 import 'package:html/parser.dart' as htmlparser;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -222,7 +220,7 @@ class NewsService {
       }
     } catch (e) {
       LogService.log('Error fetching category news: $e', category: 'news_error');
-      throw e;
+      rethrow;
     }
   }
 }

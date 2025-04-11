@@ -230,13 +230,12 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
   }
   
   Widget _buildFullscreenLayout() {
-    return WillPopScope(
-      onWillPop: () async {
-        if (_isFullScreen) {
+    return PopScope(
+      canPop: !_isFullScreen,
+      onPopInvokedWithResult: (didPop, result) {
+        if (_isFullScreen && !didPop) {
           _toggleFullScreen();
-          return false;
         }
-        return true;
       },
       child: ColoredBox(
         color: Colors.black,

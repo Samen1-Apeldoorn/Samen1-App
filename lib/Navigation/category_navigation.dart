@@ -77,7 +77,7 @@ class _NewsContainerState extends State<NewsContainer> {
                     decoration: BoxDecoration(
                       color: isSelected 
                         ? Colors.white 
-                        : Colors.white.withOpacity(0.25),
+                        : Colors.white.withAlpha(64),
                       borderRadius: BorderRadius.circular(20),
                     ),
                     child: Center(

@@ -229,7 +229,6 @@ class _SettingsPageState extends State<SettingsPage> {
           ),
           ElevatedButton(
             onPressed: () => _submitBugReport(
-              context,
               descriptionController.text,
               emailController.text,
             ),
@@ -240,15 +239,18 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
   
-  Future<void> _submitBugReport(BuildContext context, String description, String email) async {
+  Future<void> _submitBugReport(String description, String email) async {
     if (description.isEmpty) {
       LogService.log('SettingsPage: Bug report submission canceled - empty description', category: 'settings');
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Geef een beschrijving van het probleem'))
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Geef een beschrijving van het probleem'))
+        );
+      }
       return;
     }
     
+    if (!mounted) return;
     Navigator.pop(context);
     
     String reportText = description;

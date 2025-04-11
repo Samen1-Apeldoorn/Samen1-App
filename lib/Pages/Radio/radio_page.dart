@@ -258,7 +258,7 @@ class _RadioPageState extends State<RadioPage> {
                       color: Colors.grey[200],
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: Colors.black.withAlpha(51),
                           spreadRadius: 2,
                           blurRadius: 5,
                           offset: const Offset(0, 3),
