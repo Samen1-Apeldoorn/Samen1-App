@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_html/flutter_html.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../Pages/News/news_styles.dart';
 import '../Pages/News/news_service.dart';
 
@@ -224,6 +225,14 @@ class NewsArticleScreen extends StatelessWidget {
           textAlign: TextAlign.center,  // Centreer de bijschriften
           backgroundColor: NewsStyles.backgroundGreyColor,
         ),
+      },
+      onLinkTap: (String? url, _, __) async {
+        if (url != null) {
+          final uri = Uri.parse(url);
+          if (await canLaunchUrl(uri)) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        }
       },
     );
   }
