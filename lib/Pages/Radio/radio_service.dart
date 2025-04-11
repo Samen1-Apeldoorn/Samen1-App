@@ -3,7 +3,7 @@ import 'package:just_audio_background/just_audio_background.dart';
 import '../../services/log_service.dart';
 
 /// Singleton service to manage a single AudioPlayer instance across the app
-/// just_audio_background only supports a single player instance
+/// for background playback using just_audio_background.
 class AudioService {
   // Singleton instance
   static final AudioService _instance = AudioService._internal();
@@ -15,7 +15,7 @@ class AudioService {
   AudioService._internal() {
     LogService.log('AudioService: Initializing singleton instance', category: 'audio');
     
-    // Listen to player state changes for logging
+    // Listen to player state changes for logging and potential error handling
     player.playerStateStream.listen((state) {
       final processingState = state.processingState;
       final playing = state.playing;
@@ -26,13 +26,28 @@ class AudioService {
         'Playing: $playing', 
         category: 'audio_state'
       );
+
+      // Handle potential errors signaled by the idle state after playing/loading
+      if (processingState == ProcessingState.idle && !_isDisposing && player.audioSource != null) {
+         // Log only if it becomes idle *after* an audio source has been set
+         LogService.log(
+           'AudioService: Player entered idle state unexpectedly after source was set.',
+           category: 'audio_warning'
+         );
+      }
+
+    }, onError: (error, stackTrace) { // Added onError callback for the stream
+       LogService.log(
+         'AudioService: Player state stream error: $error\n$stackTrace',
+         category: 'audio_error'
+       );
     });
     
-    // Log playback exceptions
-    player.playbackEventStream.listen((event) {}, 
-      onError: (error) {
+    // Log general playback errors
+    player.playbackEventStream.listen((_) {}, 
+      onError: (error, stackTrace) { // Added stackTrace
         LogService.log(
-          'AudioService: Playback event error: $error',
+          'AudioService: Playback event error: $error\n$stackTrace',
           category: 'audio_error'
         );
       }
@@ -97,7 +112,7 @@ class AudioService {
     }
   }
 
-  // Update player with new track information
+  // Update player notification with new track information
   Future<void> updateMediaItem({
     required String title,
     required String artist,
@@ -105,87 +120,96 @@ class AudioService {
   }) async {
     try {
       LogService.log(
-        'AudioService: Updating media item - Title: "$title", Artist: "$artist"',
-        category: 'audio'
+        'AudioService: Updating media item via setAudioSource - Title: "$title", Artist: "$artist"',
+        category: 'audio_update'
       );
       
       final effectiveArtUrl = artworkUrl.isNotEmpty ? artworkUrl : fallbackArtworkUrl;
-      final wasPlaying = player.playing;
       
+      // Create a new MediaItem with updated info
+      final newMediaItem = MediaItem(
+        id: radioStationId,
+        title: title,
+        artist: artist,
+        artUri: Uri.parse(effectiveArtUrl),
+        displayTitle: title, // Use actual title/artist for display fields
+        displaySubtitle: artist,
+      );
+
+      // Recreate the audio source with the new tag.
+      // This is necessary for just_audio_background to update the notification.
+      // It might cause a brief interruption or require the player to re-buffer.
       final audioSource = AudioSource.uri(
         Uri.parse(radioStreamUrl),
-        tag: MediaItem(
-          id: radioStationId,
-          title: title,
-          artist: artist,
-          artUri: Uri.parse(effectiveArtUrl),
-          displayTitle: title,
-          displaySubtitle: artist,
-        ),
+        tag: newMediaItem,
       );
-      
-      // Update the audio source
-      await player.setAudioSource(audioSource, preload: false);
-      
-      // Restore playing state if needed
-      if (wasPlaying && !player.playing) {
-        LogService.log('AudioService: Restoring playing state after media item update', 
-          category: 'audio');
-        player.play();
-      }
+
+      // Use setAudioSource to apply the changes. preload: false might help reduce interruption.
+      await player.setAudioSource(audioSource, preload: false, initialPosition: player.position); // Try preserving position
+      LogService.log('AudioService: Audio source reset with new media item tag.', category: 'audio_update');
+
     } catch (e, stack) {
       LogService.log(
         'AudioService: Error updating media item: $e\n$stack', 
         category: 'audio_error'
       );
+      // Do not rethrow here, just log the error. UI should react to player state.
     }
   }
 
   // Play the current stream
   Future<void> play() async {
     try {
-      LogService.log('AudioService: Starting playback', category: 'audio');
-      await player.play();
+      if (!player.playing) { // Avoid calling play if already playing
+        LogService.log('AudioService: Starting playback', category: 'audio_action');
+        await player.play();
+      }
     } catch (e, stack) {
       LogService.log(
         'AudioService: Error starting playback: $e\n$stack', 
         category: 'audio_error'
       );
-      rethrow;
+      // Removed rethrow
     }
   }
 
   // Pause the current stream
   Future<void> pause() async {
     try {
-      LogService.log('AudioService: Pausing playback', category: 'audio');
-      await player.pause();
+      if (player.playing) { // Avoid calling pause if already paused
+        LogService.log('AudioService: Pausing playback', category: 'audio_action');
+        await player.pause();
+      }
     } catch (e, stack) {
       LogService.log(
         'AudioService: Error pausing playback: $e\n$stack', 
         category: 'audio_error'
       );
-      rethrow;
+      // Removed rethrow
     }
   }
 
-  // Stop the current stream
+  // Stop the current stream and release some resources
   Future<void> stop() async {
     try {
-      LogService.log('AudioService: Stopping playback', category: 'audio');
-      await player.stop();
+      LogService.log('AudioService: Stopping playback', category: 'audio_action');
+      await player.stop(); // stop releases fewer resources than dispose
     } catch (e, stack) {
       LogService.log(
         'AudioService: Error stopping playback: $e\n$stack', 
         category: 'audio_error'
       );
-      rethrow;
+      // Removed rethrow
     }
   }
 
-  // Dispose the player (call this when app is shutting down)
+  // Dispose the player (call this only when the app is completely shutting down)
   void dispose() {
+    _isDisposing = true; // Set flag to avoid error logs during disposal
     LogService.log('AudioService: Disposing player resources', category: 'audio');
     player.dispose();
   }
+
+  // Flag to prevent logging errors during disposal
+  bool _isDisposing = false; 
 }
