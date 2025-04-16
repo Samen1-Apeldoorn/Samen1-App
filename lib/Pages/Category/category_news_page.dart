@@ -328,7 +328,7 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
           Icon(Icons.error_outline, size: NewsStyles.errorIconSize, color: NewsStyles.errorIconColor),
           NewsStyles.largeSpaceVertical,
           const Text(
-            'Er is iets misgegaan bij het laden van het nieuws.\nMogelijk is de API tijdelijk niet beschikbaar.',
+            'Oeps, het laden van het nieuws is niet gelukt.\nProbeer het over een paar minuten opnieuw.\nBlijft dit gebeuren? Laat het ons weten via een bugrapport in de instellingen..',
             textAlign: TextAlign.center,
           ),
           NewsStyles.extraLargeSpaceVertical,

@@ -51,7 +51,7 @@ void main() async {
   try {
     await Workmanager().initialize(
       callbackDispatcher,
-      isInDebugMode: true
+      isInDebugMode: false // Set to false to disable default workmanager logs
     );
     LogService.log('Workmanager initialized', category: 'initialization');
   } catch (e) {
@@ -70,13 +70,15 @@ void callbackDispatcher() {
       WidgetsFlutterBinding.ensureInitialized();
       await NotificationService.initialize();
       
-      LogService.log('Background task started: $taskName', category: 'background_task');
+      // Optional: Remove specific LogService calls if desired
+      // LogService.log('Background task started: $taskName', category: 'background_task'); 
       
       if (taskName == 'checkRSSFeed') {
         await RSSService.checkForNewContent();
       }
       
-      LogService.log('Background task completed successfully', category: 'background_task');
+      // Optional: Remove specific LogService calls if desired
+      // LogService.log('Background task completed successfully', category: 'background_task');
       return true;
     } catch (e, stack) {
       LogService.log('Background task error: $e\n$stack', category: 'background_task_error');
