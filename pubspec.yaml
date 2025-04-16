@@ -32,7 +32,7 @@ dependencies:
   cached_network_image: ^3.3.0
   intl: ^0.20.0
   flutter_html: ^3.0.0
-  just_audio: ^0.9.27
+  just_audio: ^0.10.0
   just_audio_background: ^0.0.1-beta.15
   
 dev_dependencies:
