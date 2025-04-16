@@ -87,57 +87,73 @@ class NewsArticleScreen extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: NewsStyles.backgroundGreyColor,  // Achtergrondkleur voor de metadata
                 ),
-                child: Row(
-                  mainAxisAlignment: MainAxisAlignment.start,  // Zorg ervoor dat de elementen links uitgelijnd zijn
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start, // Zorg ervoor dat de tekst links uitgelijnd is
                   children: [
-                    Text(
-                      article.category,
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.black87,
-                        fontWeight: FontWeight.w600,
-                        height: 1.0,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      "•",  // Een separator
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.black87,
-                        height: 1.0,
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _formatDate(article.date),  // Formatteer de datum
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Color(0xFF757575),
-                        height: 1.0,
-                      ),
-                    ),
-                    if (article.imageCaption != null && article.imageCaption!.isNotEmpty) ...[
-                      const Spacer(),
-                      Text(
-                        article.imageCaption!,
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Color(0xFF757575),
-                          height: 1.0,
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center, // Zorg ervoor dat alles verticaal gecentreerd is
+                      children: [
+                        Expanded(
+                          child: Row(
+                            children: [
+                              Text(
+                                article.category,
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.w600,
+                                  height: 1.0,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                "•",
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Colors.black87,
+                                  height: 1.0,
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                _formatDate(article.date),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: Color(0xFF757575),
+                                  height: 1.0,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      Text(
-                        "Door: ${article.author}",  // Auteur van het artikel
-                        style: const TextStyle(
-                          fontSize: 11,
-                          color: Colors.black87,
-                          fontWeight: FontWeight.w600,
-                          height: 1.0,
+                        if (article.imageCaption != null && article.imageCaption!.isNotEmpty)
+                          Expanded(
+                            child: Text(
+                              article.imageCaption!,
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: Color(0xFF757575),
+                                height: 1.0,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.end,
+                            ),
+                          ),
+                      ],
+                    ),
+                    if (article.author.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4), // Voeg wat ruimte toe boven de "Door:"-tekst
+                        child: Text(
+                          "Door: ${article.author}",
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: Colors.black87,
+                            fontWeight: FontWeight.w600,
+                            height: 1.0,
+                          ),
                         ),
                       ),
-                    ],
                   ],
                 ),
               ),

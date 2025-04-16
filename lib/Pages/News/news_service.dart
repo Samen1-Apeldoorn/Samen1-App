@@ -16,7 +16,12 @@ class NewsArticle {
   final String author;
 
   static const Map<int, String> predefinedNames = {
-    2: "Serge Poppelaars",
+    4: "Serge Poppelaars",
+    20: "Donya Tijdink",
+    7: "Christiaan Geitenbeek",
+    8: "Floris van den Broek",
+    25: "Vera Kaal",
+
   };
 
   NewsArticle({
@@ -115,7 +120,7 @@ class NewsArticle {
           ? htmlparser.parse(media!['caption']['rendered']).body?.text
           : null,
       category: _getCategoryFromClassList(classList),
-      author: predefinedNames[json['author']] ?? 'Onbekend',
+      author: predefinedNames[json['author']] ?? ('Onbekend: ' + json['author'].toString()),
     );
   }
 }
