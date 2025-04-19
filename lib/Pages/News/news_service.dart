@@ -149,7 +149,7 @@ class NewsArticle {
           : null,
       category: _getCategoryFromClassList(classList),
       author: predefinedNames[json['author']] ?? 'Onbekend: ${json['author']}',
-      mediaDetails: mediaDetails, // Pass media details to constructor
+      mediaDetails: mediaDetails, // Only pass mediaDetails
     );
   }
 }
