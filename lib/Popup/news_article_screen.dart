@@ -210,50 +210,83 @@ class NewsArticleScreen extends StatelessWidget {
   // Functie om de HTML content van het artikel weer te geven
   Widget _buildArticleContent(String htmlContent, BuildContext context) {
     final screenWidth = (MediaQuery.of(context).size.width - NewsStyles.htmlCaptionPadding * 2) * 0.92;
-    // Bereken de hoogte van de afbeelding op basis van een 16:9 verhouding
     final imageHeight = screenWidth * (2/3);
+
+    // Vervang YouTube iframes met een aangepaste knop
+    final modifiedContent = _replaceYouTubeIframes(htmlContent);
     
     return Html(
-      data: htmlContent,  // De HTML content die je wilt renderen
+      data: modifiedContent,
       style: {
         "body": Style(
-          fontSize: FontSize(NewsStyles.htmlBodyFontSize),  // Stel de lettergrootte in voor de tekst
+          fontSize: FontSize(NewsStyles.htmlBodyFontSize),
           fontWeight: FontWeight.normal,
           color: Colors.black87,
           lineHeight: LineHeight(NewsStyles.htmlLineHeight),
         ),
-        "p": Style(  // Stijl voor paragraaf
-          margin: Margins.only(bottom: NewsStyles.htmlMarginBottom),  // Ruimte onder elke paragraaf
+        "p": Style(
+          margin: Margins.only(bottom: NewsStyles.htmlMarginBottom),
         ),
-        "strong": Style(  // Stijl voor vetgedrukte tekst
-          fontWeight: FontWeight.bold,
-        ),
-        "img": Style(  // Stijl voor afbeeldingen
-          width: Width(screenWidth),  // Breedte van de afbeelding gebaseerd op het scherm
-          height: Height(imageHeight),  // Hoogte berekend met de 16:9 verhouding
-          alignment: Alignment.center,  // Centraal uitlijnen van de afbeelding
+        "img": Style(
+          width: Width(screenWidth),
+          height: Height(imageHeight),
+          alignment: Alignment.center,
         ),
         "figure": Style(
           margin: Margins.symmetric(vertical: NewsStyles.htmlFigureMargin),
           display: Display.block,
         ),
-        "figcaption": Style(  // Stijl voor bijschriften bij afbeeldingen
+        "figcaption": Style(
           padding: HtmlPaddings.all(NewsStyles.htmlCaptionPadding),
-          width: Width(screenWidth),  // Zorg ervoor dat de bijschriften net iets smaller zijn dan de afbeelding
+          width: Width(screenWidth),
           fontSize: FontSize(NewsStyles.htmlCaptionFontSize),
           color: Colors.grey,
-          textAlign: TextAlign.center,  // Centreer de bijschriften
+          textAlign: TextAlign.center,
           backgroundColor: NewsStyles.backgroundGreyColor,
+        ),
+        "div.youtube-container": Style(
+          width: Width(screenWidth),
+          margin: Margins.symmetric(vertical: 16),
+          alignment: Alignment.center,
         ),
       },
       onLinkTap: (String? url, _, __) async {
-        if (url != null) {
-          final uri = Uri.parse(url);
-          if (await canLaunchUrl(uri)) {
-            await launchUrl(uri, mode: LaunchMode.externalApplication);
-          }
+        if (url != null && url.contains('youtu')) {
+          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
         }
       },
     );
+  }
+
+  String _replaceYouTubeIframes(String content) {
+    // Detecteer zowel iframes als ytp-cued-thumbnail-overlay divs
+    final regex = RegExp(r'(?:<iframe[^>]*(?:youtube\.com|youtu\.be)[^>]*?\/embed\/([a-zA-Z0-9_-]+)[^>]*>)|(?:<div class="ytp-cued-thumbnail-overlay"[^>]*>.*?vi\/([a-zA-Z0-9_-]+)\/[^"]*".*?<\/div>)', dotAll: true);
+    
+    return content.replaceAllMapped(regex, (match) {
+      // Pak de video ID van ofwel de iframe (group 1) of de thumbnail (group 2)
+      final videoId = match.group(1) ?? match.group(2);
+      if (videoId == null) return match.group(0) ?? '';
+      
+      final youtubeUrl = 'https://youtu.be/$videoId';
+      return '''
+        <div style="
+          background-color: #b03333;
+          border-radius: 25px;
+          margin: 16px 0;
+          text-align: center;
+          padding: 8px;
+        ">
+          <a href="$youtubeUrl" style="
+            color: white;
+            display: block;
+            padding: 12px;
+            text-decoration: none;
+            font-weight: bold;
+          ">
+            Bekijk de video op YouTube
+          </a>
+        </div>
+      ''';
+    });
   }
 }
