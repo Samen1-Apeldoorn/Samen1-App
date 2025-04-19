@@ -6,6 +6,9 @@ import '../../services/log_service.dart';
 import '../News/news_service.dart';
 import '../../Popup/news_article_screen.dart';
 
+// Define LoadState enum (same as in news_page.dart)
+enum LoadState { initial, loadingInitial, loadingMore, preloading, refreshing, idle, error, allLoaded }
+
 class CategoryNewsPage extends StatefulWidget {
   final String title;
   final int categoryId;
@@ -25,114 +28,107 @@ class CategoryNewsPage extends StatefulWidget {
 class _CategoryNewsPageState extends State<CategoryNewsPage> {
   final List<NewsArticle> _articles = [];
   List<NewsArticle> _preloadedArticles = [];
-  bool _isLoading = false;
-  bool _isPreloading = false;
-  bool _hasError = false;
+  // Replace boolean flags with LoadState
+  LoadState _loadState = LoadState.initial;
   bool _hasMoreArticles = true;
-  int _currentPage = 1;
+  int _currentPage = 1; // Represents the page *to load next*
   final ScrollController _scrollController = ScrollController();
-  DateTime _lastLoadTime = DateTime.now();
-  bool _loadingTriggered = false;
-  static const int _initialLoadCount = 6;
   static const int _fullPageCount = 15;
-  bool _loadingRemainingArticles = false;
-  bool _isDisposed = false;  // Track if widget is disposed
+  bool _isDisposed = false;
 
   @override
   void initState() {
     super.initState();
-    _loadInitialNews();
+    // Load the first full page directly
+    _loadNews(isInitialLoad: true); 
     _scrollController.addListener(_scrollListener);
     LogService.log('Category page opened: ${widget.title}', category: 'news');
   }
 
   @override
   void dispose() {
-    _isDisposed = true;  // Mark as disposed
+    _isDisposed = true;
     _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
     super.dispose();
   }
 
-  // Scroll listener with debouncing
+  // Updated scroll listener using LoadState
   void _scrollListener() {
-    if (!mounted || _isDisposed) return;  // Early return if not mounted
-    
+    if (!mounted || _isDisposed) return;
+
     final scrollThreshold = 0.8 * _scrollController.position.maxScrollExtent;
-    
-    // Check if we should preload next page (when 80% through the list)
-    if (_scrollController.position.pixels >= scrollThreshold && 
-        !_isPreloading && 
-        !_loadingTriggered && 
+    final nearBottom = _scrollController.position.pixels >= 
+                      _scrollController.position.maxScrollExtent - 1200;
+
+    // Preload trigger
+    if (_scrollController.position.pixels >= scrollThreshold &&
+        _loadState == LoadState.idle && // Only preload when idle
         _hasMoreArticles && 
         _preloadedArticles.isEmpty) {
       _preloadNextPage();
     }
     
-    // Load more when near the bottom (about 4-5 articles from bottom)
-    if (_scrollController.position.pixels >= 
-        _scrollController.position.maxScrollExtent - 1200) {
-      if (!_isLoading && 
-          !_loadingTriggered && 
-          _hasMoreArticles && 
-          DateTime.now().difference(_lastLoadTime).inMilliseconds > 1500) {
-        
-        _loadingTriggered = true;
-        LogService.log('Nearing end of list, loading more articles', category: 'news');
-        
-        // Use Future.delayed to slightly defer loading to prevent janky scrolling
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (mounted && !_isDisposed) _loadNews();
-        });
-      }
+    // Load more trigger
+    if (nearBottom && 
+        _loadState == LoadState.idle && // Only load more when idle
+        _hasMoreArticles) {
+      // Use Future.delayed
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted && !_isDisposed && _loadState == LoadState.idle) { // Double check state
+          LogService.log('Nearing end of list, loading more articles for page $_currentPage', category: 'news');
+          _loadNews(); 
+        }
+      });
     }
   }
 
+  // Updated preload function using LoadState
   Future<void> _preloadNextPage() async {
-    if (_isPreloading || !_hasMoreArticles || !mounted || _isDisposed) return;
+    final pageToPreload = _currentPage;
+    if (_loadState == LoadState.preloading || !_hasMoreArticles || !mounted || _isDisposed) return;
     
-    _isPreloading = true;
-    LogService.log('Preloading category news page ${_currentPage + 1}', category: 'news');
+    _loadState = LoadState.preloading;
+    LogService.log('Preloading category news page $pageToPreload', category: 'news');
     
     try {
-      // Use the category-specific method to fetch news
       final articles = await NewsService.getNewsByCategory(
         categoryId: widget.categoryId,
-        page: _currentPage + 1, 
-        perPage: 15
+        page: pageToPreload, 
+        perPage: _fullPageCount
       );
       
-      if (!mounted || _isDisposed) return;  // Check again after async operation
+      if (!mounted || _isDisposed) return;
       
       if (articles.isEmpty) {
-        _hasMoreArticles = false;
+        LogService.log('Preload found no articles for page $pageToPreload', category: 'news');
+         _preloadedArticles = [];
       } else {
         _preloadedArticles = articles;
-        LogService.log('Successfully preloaded ${articles.length} articles for page ${_currentPage + 1}', 
+        LogService.log('Successfully preloaded ${articles.length} articles for page $pageToPreload', 
             category: 'news');
       }
     } catch (e) {
-      LogService.log('Failed to preload category news page ${_currentPage + 1}: $e', category: 'news_error');
+      LogService.log('Failed to preload category news page $pageToPreload: $e', category: 'news_error');
+       _preloadedArticles = [];
     } finally {
-      if (mounted && !_isDisposed) {
-        setState(() {
-          _isPreloading = false;
-        });
+      if (mounted && !_isDisposed && _loadState == LoadState.preloading) {
+        _loadState = LoadState.idle;
       }
     }
   }
 
-  // Load news articles
-  Future<void> _loadNews() async {
-    if (_isLoading || !_hasMoreArticles || !mounted || _isDisposed) return;
+  // Updated loading function using LoadState
+  Future<void> _loadNews({bool isInitialLoad = false}) async {
+    if (!mounted || _isDisposed ||
+        (_loadState != LoadState.idle && 
+         _loadState != LoadState.initial &&
+         _loadState != LoadState.error)) return;
     
-    _lastLoadTime = DateTime.now();
-    _loadingTriggered = false;
-    
-    if (!mounted || _isDisposed) return;  // Double check
     setState(() {
-      _isLoading = true;
+       _loadState = isInitialLoad ? LoadState.loadingInitial : LoadState.loadingMore;
     });
+    LogService.log('Loading category news page $_currentPage (Initial: $isInitialLoad)', category: 'news');
 
     try {
       List<NewsArticle> articles;
@@ -143,155 +139,107 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
         articles = _preloadedArticles;
         _preloadedArticles = [];
       } else {
-        // Otherwise load from API using the category-specific method
-        LogService.log('Loading page $_currentPage directly', category: 'news');
+        // Otherwise load from API
+        LogService.log('Loading page $_currentPage directly from API', category: 'news');
         articles = await NewsService.getNewsByCategory(
           categoryId: widget.categoryId,
           page: _currentPage, 
-          perPage: 15
+          perPage: _fullPageCount
         );
       }
       
-      if (!mounted || _isDisposed) return;  // Check again after async operation
+      if (!mounted || _isDisposed) return;
       
-      if (articles.isEmpty && _currentPage == 1) {
-        LogService.log('No articles found on first page', category: 'news_warning');
-        setState(() {
-          _isLoading = false;
-          _hasError = true;
-        });
-        return;
-      } else if (articles.isEmpty) {
-        setState(() {
-          _isLoading = false;
-          _hasMoreArticles = false;
-        });
-        return;
-      }
-      
-      setState(() {
+      if (articles.isEmpty) {
+        _hasMoreArticles = false;
+        LogService.log('Loaded 0 articles for page $_currentPage. Reached end.', category: 'news');
+        if (_articles.isEmpty) {
+           _loadState = LoadState.error;
+           LogService.log('No articles found on initial load (page 1). Setting error state.', category: 'news_warning');
+        } else {
+           _loadState = LoadState.allLoaded;
+        }
+      } else {
         _articles.addAll(articles);
-        _isLoading = false;
-        _currentPage++;
-      });
+        _currentPage++; 
+        _loadState = LoadState.idle;
+        LogService.log('Loaded ${articles.length} articles. Total: ${_articles.length}. Next page to load/preload: $_currentPage', category: 'news');
+      }
 
-      // Start preloading next page immediately after current page is loaded
-      if (_hasMoreArticles && _preloadedArticles.isEmpty) {
+      // Trigger preload for the next page
+      if (_loadState == LoadState.idle && _hasMoreArticles && _preloadedArticles.isEmpty) {
         _preloadNextPage();
       }
       
-      LogService.log('Loaded ${articles.length} articles. Total: ${_articles.length}', category: 'news');
     } catch (e) {
-      if (!mounted || _isDisposed) return;  // Check again after async error
-      
-      setState(() {
-        _isLoading = false;
-        _hasError = _articles.isEmpty;
-      });
-      
-      LogService.log('Failed to load news: $e', category: 'news_error');
-    }
-  }
-
-  Future<void> _loadInitialNews() async {
-    if (_isLoading || !_hasMoreArticles || !mounted || _isDisposed) return;
-    
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Load initial batch of articles using the category-specific method
-      final articles = await NewsService.getNewsByCategory(
-        categoryId: widget.categoryId,
-        page: _currentPage, 
-        perPage: _initialLoadCount
-      );
-      
-      if (!mounted || _isDisposed) return;  // Check again after async operation
-      
-      setState(() {
-        _articles.addAll(articles);
-        _isLoading = false;
-        if (articles.isEmpty) {
-          _hasError = _currentPage == 1;
-          _hasMoreArticles = false;
-        }
-      });
-      
-      // Load remaining articles for the current page in the background
+      LogService.log('Failed to load category news for page $_currentPage: $e', category: 'news_error');
       if (mounted && !_isDisposed) {
-        _loadRemainingArticles();
+         _loadState = _articles.isEmpty ? LoadState.error : LoadState.idle;
       }
-    } catch (e) {
-      if (!mounted || _isDisposed) return;  // Check again after async error
-      
-      setState(() {
-        _isLoading = false;
-        _hasError = _articles.isEmpty;
-      });
-      
-      LogService.log('Failed to load initial news: $e', category: 'news_error');
-    }
-  }
-
-  Future<void> _loadRemainingArticles() async {
-    if (_loadingRemainingArticles || !mounted || _isDisposed) return;
-    
-    _loadingRemainingArticles = true;
-    LogService.log('Loading remaining articles for current page', category: 'news');
-    
-    try {
-      final remainingArticles = await NewsService.getNewsByCategory(
-        categoryId: widget.categoryId,
-        page: _currentPage,
-        perPage: _fullPageCount,
-        skipFirst: _initialLoadCount
-      );
-      
-      if (!mounted || _isDisposed) {
-        // Critical check - this is where the error was happening
-        LogService.log('Widget disposed before remaining articles loaded', category: 'news');
-        return;
-      }
-      
-      setState(() {
-        _articles.addAll(remainingArticles);
-        _loadingRemainingArticles = false;
-      });
-      
-      // Start preloading next page after loading remaining articles
-      if (_hasMoreArticles && _preloadedArticles.isEmpty && mounted && !_isDisposed) {
-        await _preloadNextPage();
-        
-        if (mounted && !_isDisposed) {
-          setState(() {
-            _currentPage++;
-          });
-        }
-      }
-    } catch (e) {
+    } finally {
       if (mounted && !_isDisposed) {
-        _loadingRemainingArticles = false;
+        setState(() {});
       }
-      LogService.log('Failed to load remaining articles: $e', category: 'news_error');
     }
   }
 
+  // Smarter refresh function
   Future<void> _refreshNews() async {
-    if (!mounted || _isDisposed) return;
+    if (!mounted || _isDisposed || _loadState == LoadState.refreshing) return;
+    LogService.log('Refreshing category news...', category: 'news');
     
     setState(() {
-      _articles.clear();
-      _preloadedArticles.clear();
-      _currentPage = 1;
-      _hasMoreArticles = true;
-      _hasError = false;
-      _loadingTriggered = false;
-      _loadingRemainingArticles = false;
+      _loadState = LoadState.refreshing;
+       _preloadedArticles = [];
     });
     
-    await _loadInitialNews();
+    try {
+      // Fetch the very first page
+      final List<NewsArticle> fetchedArticles = await NewsService.getNewsByCategory(
+        categoryId: widget.categoryId, 
+        page: 1, 
+        perPage: _fullPageCount
+      );
+
+      if (!mounted || _isDisposed) return;
+
+      if (fetchedArticles.isNotEmpty) {
+        final currentIds = _articles.map((a) => a.id).toSet();
+        final newArticles = fetchedArticles.where((a) => !currentIds.contains(a.id)).toList();
+
+        if (newArticles.isNotEmpty) {
+          LogService.log('Found ${newArticles.length} new articles during refresh.', category: 'news');
+          setState(() {
+            _articles.insertAll(0, newArticles);
+          });
+        } else {
+          LogService.log('No new articles found during refresh.', category: 'news');
+        }
+      } else {
+         LogService.log('Refresh fetch returned empty list.', category: 'news_warning');
+      }
+
+      // Reset state after refresh logic
+      setState(() {
+        _currentPage = 1; 
+        _hasMoreArticles = true; 
+        _loadState = LoadState.idle;
+      });
+      
+      // Trigger preload for page 2
+      _preloadNextPage();
+
+    } catch (e) {
+      LogService.log('Error during category news refresh: $e', category: 'news_error');
+      if (mounted && !_isDisposed) {
+        setState(() {
+           _loadState = _articles.isEmpty ? LoadState.error : LoadState.idle;
+        });
+         ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Kon nieuws niet vernieuwen.'))
+        );
+      }
+    }
   }
 
   @override
@@ -311,9 +259,9 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
       ),
       body: RefreshIndicator(
         onRefresh: _refreshNews,
-        child: _isLoading && _articles.isEmpty
+        child: _loadState == LoadState.loadingInitial && _articles.isEmpty
             ? const Center(child: CircularProgressIndicator())
-            : _hasError && _articles.isEmpty
+            : _loadState == LoadState.error && _articles.isEmpty
                 ? _buildErrorView()
                 : _buildNewsLayout(),
       ),
@@ -321,7 +269,7 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
   }
 
   Widget _buildErrorView() {
-    return Center(
+     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -333,7 +281,7 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
           ),
           NewsStyles.extraLargeSpaceVertical,
           ElevatedButton(
-            onPressed: _refreshNews,
+            onPressed: () => _loadNews(isInitialLoad: true), // Retry initial load
             child: const Text('Opnieuw proberen'),
           ),
         ],
@@ -342,14 +290,14 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
   }
 
   Widget _buildNewsLayout() {
-    if (_articles.isEmpty) {
-      return Center(
+     if (_articles.isEmpty && (_loadState == LoadState.idle || _loadState == LoadState.allLoaded)) {
+       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.article_outlined, size: NewsStyles.infoIconSize, color: NewsStyles.infoIconColor),
             NewsStyles.largeSpaceVertical,
-            Text(
+             Text(
               'Geen artikelen gevonden in ${widget.title}.\nProbeer het later nog eens.',
               textAlign: TextAlign.center,
             ),
@@ -360,7 +308,7 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
 
     return ListView(
       controller: _scrollController,
-      padding: EdgeInsets.zero, // Remove default ListView padding
+      padding: EdgeInsets.zero, 
       children: [
         // Featured article - no padding, full width
         if (_articles.isNotEmpty) _buildFeaturedArticle(_articles.first),
@@ -378,12 +326,13 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
               },
             ),
           ),
+        // Footer showing loading indicator or end message
         Container(
           padding: NewsStyles.verticalPadding,
           alignment: Alignment.center,
-          child: _isLoading
+          child: _loadState == LoadState.loadingMore
               ? const CircularProgressIndicator()
-              : !_hasMoreArticles && _articles.isNotEmpty
+              : _loadState == LoadState.allLoaded && _articles.isNotEmpty
                   ? Text(
                       'Alle artikelen zijn geladen',
                       style: NewsStyles.noMoreArticlesStyle,
@@ -395,6 +344,8 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
   }
 
   Widget _buildFeaturedArticle(NewsArticle article) {
+    // Use context 'featured'
+    final imageUrl = article.getImageUrlForContext('featured');
     return GestureDetector(
       onTap: () => _openArticle(article),
       child: Container(
@@ -402,11 +353,11 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (article.imageUrl.isNotEmpty)
+            if (imageUrl.isNotEmpty) // Check the context-specific URL
               Stack(
                 children: [
                   CachedNetworkImage(
-                    imageUrl: article.imageUrl,
+                    imageUrl: imageUrl, // Use context-specific URL
                     height: NewsStyles.featuredImageHeightLarge,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -448,7 +399,7 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
                   ),
                 ],
               ),
-            if (article.imageUrl.isEmpty)
+            if (imageUrl.isEmpty) // Check the context-specific URL
               Padding(
                 padding: NewsStyles.defaultPadding,
                 child: Column(
@@ -480,6 +431,8 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
   }
 
   Widget _buildHorizontalArticleItem(NewsArticle article) {
+    // Use context 'list_item'
+    final imageUrl = article.getImageUrlForContext('list_item');
     return GestureDetector(
       onTap: () => _openArticle(article),
       child: Container(
@@ -493,7 +446,7 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (article.imageUrl.isNotEmpty)
+            if (imageUrl.isNotEmpty) // Check the context-specific URL
               ClipRRect(
                 borderRadius: const BorderRadius.only(
                   topLeft: Radius.circular(8),
@@ -503,7 +456,7 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
                   width: NewsStyles.horizontalImageWidth,
                   height: NewsStyles.horizontalArticleHeight,
                   child: CachedNetworkImage(
-                    imageUrl: article.imageUrl,
+                    imageUrl: imageUrl, // Use context-specific URL
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
                       color: NewsStyles.placeholderColor,

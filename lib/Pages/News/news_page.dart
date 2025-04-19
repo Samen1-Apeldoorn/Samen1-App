@@ -6,6 +6,9 @@ import '../../services/log_service.dart';
 import 'news_service.dart';
 import '../../Popup/news_article_screen.dart';
 
+// Define LoadState enum
+enum LoadState { initial, loadingInitial, loadingMore, preloading, refreshing, idle, error, allLoaded }
+
 class NewsPage extends StatefulWidget {
   final bool isInContainer;
   
@@ -21,23 +24,18 @@ class NewsPage extends StatefulWidget {
 class _NewsPageState extends State<NewsPage> {
   final List<NewsArticle> _articles = [];
   List<NewsArticle> _preloadedArticles = [];
-  bool _isLoading = false;
-  bool _isPreloading = false;
-  bool _hasError = false;
+  // Replace boolean flags with LoadState
+  LoadState _loadState = LoadState.initial; 
   bool _hasMoreArticles = true;
-  int _currentPage = 1;
+  int _currentPage = 1; // Represents the page *to load next*
   final ScrollController _scrollController = ScrollController();
-// Add debounce timer to prevent multiple rapid requests
-  DateTime _lastLoadTime = DateTime.now();
-  bool _loadingTriggered = false;
-  static const int _initialLoadCount = 6;
   static const int _fullPageCount = 15;
-  bool _loadingRemainingArticles = false;
 
   @override
   void initState() {
     super.initState();
-    _loadInitialNews();
+    // Load the first full page directly
+    _loadNews(isInitialLoad: true); 
     _scrollController.addListener(_scrollListener);
     LogService.log('News page opened', category: 'news');
   }
@@ -49,76 +47,83 @@ class _NewsPageState extends State<NewsPage> {
     super.dispose();
   }
 
-// Improved scroll listener with debouncing
+  // Updated scroll listener using LoadState
   void _scrollListener() {
+    if (!mounted) return;
+
     final scrollThreshold = 0.8 * _scrollController.position.maxScrollExtent;
-    
-    // Check if we should preload next page (when 80% through the list)
-    if (_scrollController.position.pixels >= scrollThreshold && 
-        !_isPreloading && 
-        !_loadingTriggered && 
+    final nearBottom = _scrollController.position.pixels >= 
+                       _scrollController.position.maxScrollExtent - 1200;
+
+    // Preload trigger
+    if (_scrollController.position.pixels >= scrollThreshold &&
+        _loadState == LoadState.idle && // Only preload when idle
         _hasMoreArticles && 
         _preloadedArticles.isEmpty) {
       _preloadNextPage();
     }
     
-    // Load more when near the bottom (about 4-5 articles from bottom)
-    if (_scrollController.position.pixels >= 
-        _scrollController.position.maxScrollExtent - 1200) {
-      if (!_isLoading && 
-          !_loadingTriggered && 
-          _hasMoreArticles && 
-          DateTime.now().difference(_lastLoadTime).inMilliseconds > 1500) {
-        
-        _loadingTriggered = true;
-        LogService.log('Nearing end of list, loading more articles', category: 'news');
-        
-        // Use Future.delayed to slightly defer loading to prevent janky scrolling
-        Future.delayed(const Duration(milliseconds: 100), () {
-          if (mounted) _loadNews();
-        });
-      }
+    // Load more trigger
+    if (nearBottom && 
+        _loadState == LoadState.idle && // Only load more when idle
+        _hasMoreArticles) {
+      // Use Future.delayed to slightly defer loading
+      Future.delayed(const Duration(milliseconds: 100), () {
+        if (mounted && _loadState == LoadState.idle) { // Double check state
+           LogService.log('Nearing end of list, loading more articles for page $_currentPage', category: 'news');
+           _loadNews(); 
+        }
+      });
     }
   }
 
+  // Updated preload function using LoadState
   Future<void> _preloadNextPage() async {
-    if (_isPreloading || !_hasMoreArticles) return;
+    final pageToPreload = _currentPage; // Preload the page we expect to load next
+    if (_loadState == LoadState.preloading || !_hasMoreArticles || !mounted) return;
     
-    _isPreloading = true;
-    LogService.log('Preloading news page ${_currentPage + 1}', category: 'news');
+    // Set state without setState for background task
+    _loadState = LoadState.preloading; 
+    LogService.log('Preloading news page $pageToPreload', category: 'news');
     
     try {
-      // Use 15 articles per page instead of 11
-      final articles = await NewsService.getNews(page: _currentPage + 1, perPage: 15);
+      final articles = await NewsService.getNews(page: pageToPreload, perPage: _fullPageCount);
       
-      if (mounted) {
-        if (articles.isEmpty) {
-          _hasMoreArticles = false;
-        } else {
-          _preloadedArticles = articles;
-          LogService.log('Successfully preloaded ${articles.length} articles for page ${_currentPage + 1}', 
-              category: 'news');
-        }
+      if (!mounted) return; 
+
+      if (articles.isEmpty) {
+        // Don't set _hasMoreArticles here, let _loadNews handle it
+        LogService.log('Preload found no articles for page $pageToPreload', category: 'news');
+        _preloadedArticles = []; // Ensure preload cache is empty
+      } else {
+        _preloadedArticles = articles;
+        LogService.log('Successfully preloaded ${articles.length} articles for page $pageToPreload', 
+            category: 'news');
       }
     } catch (e) {
-      LogService.log('Failed to preload news page ${_currentPage + 1}: $e', category: 'news_error');
+      LogService.log('Failed to preload news page $pageToPreload: $e', category: 'news_error');
+      _preloadedArticles = []; // Clear cache on error
     } finally {
-      if (mounted) {
-        _isPreloading = false;
+      if (mounted && _loadState == LoadState.preloading) {
+         // Only revert to idle if still in preloading state
+        _loadState = LoadState.idle; 
+        // No setState needed as this doesn't directly affect UI until _loadNews uses it
       }
     }
   }
 
-// Improved loading with better state management
-  Future<void> _loadNews() async {
-    if (_isLoading || !_hasMoreArticles) return;
-    
-    _lastLoadTime = DateTime.now();
-    _loadingTriggered = false;
+  // Updated loading function using LoadState
+  Future<void> _loadNews({bool isInitialLoad = false}) async {
+    // Prevent concurrent loads/refreshes
+    if (!mounted || 
+        (_loadState != LoadState.idle && 
+         _loadState != LoadState.initial &&
+         _loadState != LoadState.error)) return; 
     
     setState(() {
-      _isLoading = true;
+      _loadState = isInitialLoad ? LoadState.loadingInitial : LoadState.loadingMore;
     });
+    LogService.log('Loading news page $_currentPage (Initial: $isInitialLoad)', category: 'news');
 
     try {
       List<NewsArticle> articles;
@@ -127,137 +132,106 @@ class _NewsPageState extends State<NewsPage> {
       if (_preloadedArticles.isNotEmpty) {
         LogService.log('Using preloaded articles for page $_currentPage', category: 'news');
         articles = _preloadedArticles;
-        _preloadedArticles = [];
+        _preloadedArticles = []; 
       } else {
-        // Otherwise load from API (15 articles per page instead of 11)
-        LogService.log('Loading page $_currentPage directly', category: 'news');
-        articles = await NewsService.getNews(page: _currentPage, perPage: 15);
+        // Otherwise load from API
+        LogService.log('Loading page $_currentPage directly from API', category: 'news');
+        articles = await NewsService.getNews(page: _currentPage, perPage: _fullPageCount);
       }
       
-      if (articles.isEmpty && _currentPage == 1) {
-        LogService.log('No articles found on first page', category: 'news_warning');
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _hasError = true;
-          });
+      if (!mounted) return; 
+
+      if (articles.isEmpty) {
+        _hasMoreArticles = false;
+        LogService.log('Loaded 0 articles for page $_currentPage. Reached end.', category: 'news');
+        if (_articles.isEmpty) {
+          _loadState = LoadState.error; // Set error state if first load failed
+          LogService.log('No articles found on initial load (page 1). Setting error state.', category: 'news_warning');
+        } else {
+          _loadState = LoadState.allLoaded; // Set allLoaded state if subsequent load is empty
         }
-        return;
-      } else if (articles.isEmpty) {
-        if (mounted) {
-          setState(() {
-            _isLoading = false;
-            _hasMoreArticles = false;
-          });
-        }
-        return;
-      }
-      
-      if (mounted) {
-        setState(() {
-          _articles.addAll(articles);
-          _isLoading = false;
-          _currentPage++;
-        });
+      } else {
+        _articles.addAll(articles);
+        _currentPage++; 
+        _loadState = LoadState.idle; // Back to idle after successful load
+        LogService.log('Loaded ${articles.length} articles. Total: ${_articles.length}. Next page to load/preload: $_currentPage', category: 'news');
       }
 
-      // Start preloading next page immediately after current page is loaded
-      if (_hasMoreArticles && _preloadedArticles.isEmpty) {
-        _preloadNextPage();
+      // Trigger preload for the *next* page if idle and more might exist
+      if (_loadState == LoadState.idle && _hasMoreArticles && _preloadedArticles.isEmpty) {
+         _preloadNextPage();
       }
       
-      LogService.log('Loaded ${articles.length} articles. Total: ${_articles.length}', category: 'news');
     } catch (e) {
+      LogService.log('Failed to load news for page $_currentPage: $e', category: 'news_error');
       if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _hasError = _articles.isEmpty;
-        });
+        _loadState = _articles.isEmpty ? LoadState.error : LoadState.idle; // Error only if list empty, else idle
       }
-      LogService.log('Failed to load news: $e', category: 'news_error');
+    } finally {
+       if (mounted) {
+        setState(() {}); // Update UI with final state
+      }
     }
   }
 
-  Future<void> _loadInitialNews() async {
-    if (_isLoading || !_hasMoreArticles) return;
-    
-    setState(() {
-      _isLoading = true;
-    });
-
-    try {
-      // Load initial batch of articles
-      final articles = await NewsService.getNews(page: _currentPage, perPage: _initialLoadCount);
-      
-      if (mounted) {
-        setState(() {
-          _articles.addAll(articles);
-          _isLoading = false;
-          if (articles.isEmpty) {
-            _hasError = _currentPage == 1;
-            _hasMoreArticles = false;
-          }
-        });
-        
-        // Load remaining articles for the current page in the background
-        _loadRemainingArticles();
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() {
-          _isLoading = false;
-          _hasError = _articles.isEmpty;
-        });
-      }
-      LogService.log('Failed to load initial news: $e', category: 'news_error');
-    }
-  }
-
-  Future<void> _loadRemainingArticles() async {
-    if (_loadingRemainingArticles) return;
-    
-    _loadingRemainingArticles = true;
-    LogService.log('Loading remaining articles for current page', category: 'news');
-    
-    try {
-      final remainingArticles = await NewsService.getNews(
-        page: _currentPage,
-        perPage: _fullPageCount,
-        skipFirst: _initialLoadCount
-      );
-      
-      if (mounted) {
-        setState(() {
-          _articles.addAll(remainingArticles);
-          _loadingRemainingArticles = false;
-        });
-        
-        // Start preloading next page after loading remaining articles
-        // Alleen increment currentPage nadat we de preload zijn gestart
-        if (_hasMoreArticles && _preloadedArticles.isEmpty) {
-          await _preloadNextPage();
-          setState(() {
-            _currentPage++;
-          });
-        }
-      }
-    } catch (e) {
-      _loadingRemainingArticles = false;
-      LogService.log('Failed to load remaining articles: $e', category: 'news_error');
-    }
-  }
-
+  // Smarter refresh function
   Future<void> _refreshNews() async {
+     if (!mounted || _loadState == LoadState.refreshing) return; // Prevent concurrent refreshes
+     LogService.log('Refreshing news...', category: 'news');
+     
     setState(() {
-      _articles.clear();
-      _preloadedArticles.clear();
-      _currentPage = 1;
-      _hasMoreArticles = true;
-      _hasError = false;
-      _loadingTriggered = false;
-      _loadingRemainingArticles = false;
+      _loadState = LoadState.refreshing;
+      _preloadedArticles = []; // Clear preload during refresh
     });
-    await _loadInitialNews();
+
+    try {
+      // Fetch the very first page
+      final List<NewsArticle> fetchedArticles = await NewsService.getNews(page: 1, perPage: _fullPageCount);
+
+      if (!mounted) return;
+
+      if (fetchedArticles.isNotEmpty) {
+        // Get IDs of currently displayed articles
+        final currentIds = _articles.map((a) => a.id).toSet();
+        // Filter fetched articles to find only the new ones
+        final newArticles = fetchedArticles.where((a) => !currentIds.contains(a.id)).toList();
+
+        if (newArticles.isNotEmpty) {
+          LogService.log('Found ${newArticles.length} new articles during refresh.', category: 'news');
+          setState(() {
+            _articles.insertAll(0, newArticles); // Prepend new articles
+          });
+        } else {
+          LogService.log('No new articles found during refresh.', category: 'news');
+          // Optionally show a snackbar: ScaffoldMessenger.of(context).showSnackBar(...)
+        }
+      } else {
+         LogService.log('Refresh fetch returned empty list.', category: 'news_warning');
+         // Handle case where refresh fails to get page 1 - maybe show error?
+      }
+
+      // Reset state after refresh logic
+      setState(() {
+        _currentPage = 1; // Reset to page 1 logic (next page to load is 2)
+        _hasMoreArticles = true; // Assume there might be more after refresh
+        _loadState = LoadState.idle; // Back to idle
+      });
+      
+      // Trigger preload for page 2 after successful refresh
+      _preloadNextPage(); 
+
+    } catch (e) {
+      LogService.log('Error during news refresh: $e', category: 'news_error');
+      if (mounted) {
+        setState(() {
+          // Revert to idle, keep existing articles. Error state only if list was initially empty.
+          _loadState = _articles.isEmpty ? LoadState.error : LoadState.idle; 
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Kon nieuws niet vernieuwen.'))
+        );
+      }
+    }
   }
 
   @override
@@ -277,9 +251,11 @@ class _NewsPageState extends State<NewsPage> {
       ),
       body: RefreshIndicator(
         onRefresh: _refreshNews,
-        child: _isLoading && _articles.isEmpty
+        // Show main loading indicator only on initial load
+        child: _loadState == LoadState.loadingInitial && _articles.isEmpty
             ? const Center(child: CircularProgressIndicator())
-            : _hasError && _articles.isEmpty
+            // Show error view only if in error state
+            : _loadState == LoadState.error && _articles.isEmpty 
                 ? _buildErrorView()
                 : _buildNewsLayout(),
       ),
@@ -299,7 +275,8 @@ class _NewsPageState extends State<NewsPage> {
           ),
           NewsStyles.extraLargeSpaceVertical,
           ElevatedButton(
-            onPressed: _refreshNews,
+            // Retry triggers initial load again
+            onPressed: () => _loadNews(isInitialLoad: true), 
             child: const Text('Opnieuw proberen'),
           ),
         ],
@@ -308,7 +285,8 @@ class _NewsPageState extends State<NewsPage> {
   }
 
   Widget _buildNewsLayout() {
-    if (_articles.isEmpty) {
+    // Show empty state message if idle and list is empty (after trying to load)
+    if (_articles.isEmpty && (_loadState == LoadState.idle || _loadState == LoadState.allLoaded)) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -344,23 +322,28 @@ class _NewsPageState extends State<NewsPage> {
               },
             ),
           ),
+        // Footer showing loading indicator or end message
         Container(
           padding: NewsStyles.verticalPadding,
           alignment: Alignment.center,
-          child: _isLoading
+          // Show loading more indicator
+          child: _loadState == LoadState.loadingMore
               ? const CircularProgressIndicator()
-              : !_hasMoreArticles && _articles.isNotEmpty
+              // Show all loaded message
+              : _loadState == LoadState.allLoaded && _articles.isNotEmpty 
                   ? Text(
                       'Alle artikelen zijn geladen',
                       style: NewsStyles.noMoreArticlesStyle,
                     )
-                  : const SizedBox.shrink(),
+                  : const SizedBox.shrink(), // Hide otherwise
         ),
       ],
     );
   }
 
   Widget _buildFeaturedArticle(NewsArticle article) {
+    // Use context 'featured'
+    final imageUrl = article.getImageUrlForContext('featured');
     return GestureDetector(
       onTap: () => _openArticle(article),
       child: Container(
@@ -368,11 +351,11 @@ class _NewsPageState extends State<NewsPage> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            if (article.imageUrl.isNotEmpty)
+            if (imageUrl.isNotEmpty) // Check the context-specific URL
               Stack(
                 children: [
                   CachedNetworkImage(
-                    imageUrl: article.imageUrl,
+                    imageUrl: imageUrl, // Use context-specific URL
                     height: NewsStyles.featuredImageHeightLarge,
                     width: double.infinity,
                     fit: BoxFit.cover,
@@ -414,7 +397,7 @@ class _NewsPageState extends State<NewsPage> {
                   ),
                 ],
               ),
-            if (article.imageUrl.isEmpty)
+            if (imageUrl.isEmpty) // Check the context-specific URL
               Padding(
                 padding: NewsStyles.defaultPadding,
                 child: Column(
@@ -446,6 +429,8 @@ class _NewsPageState extends State<NewsPage> {
   }
 
   Widget _buildHorizontalArticleItem(NewsArticle article) {
+    // Use context 'list_item'
+    final imageUrl = article.getImageUrlForContext('list_item');
     return GestureDetector(
       onTap: () => _openArticle(article),
       child: Container(
@@ -461,7 +446,7 @@ class _NewsPageState extends State<NewsPage> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             // Left side - Image with NO border radius on left
-            if (article.imageUrl.isNotEmpty)
+            if (imageUrl.isNotEmpty) // Check the context-specific URL
               ClipRRect(
                 // Only apply border radius to right side corners
                 borderRadius: const BorderRadius.only(
@@ -474,7 +459,7 @@ class _NewsPageState extends State<NewsPage> {
                   width: NewsStyles.horizontalImageWidth,
                   height: NewsStyles.horizontalArticleHeight,
                   child: CachedNetworkImage(
-                    imageUrl: article.imageUrl,
+                    imageUrl: imageUrl, // Use context-specific URL
                     fit: BoxFit.cover,
                     placeholder: (context, url) => Container(
                       color: NewsStyles.placeholderColor,

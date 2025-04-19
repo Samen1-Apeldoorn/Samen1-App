@@ -14,6 +14,7 @@ class NewsArticle {
   final String? imageCaption;
   final String category;
   final String author;
+  final Map<String, dynamic>? _mediaDetails; // Store media details for context-based selection
 
   static const Map<int, String> predefinedNames = {
     4: "Serge Poppelaars",
@@ -31,11 +32,12 @@ class NewsArticle {
     required this.content,
     required this.excerpt,
     required this.link,
-    required this.imageUrl,
+    required this.imageUrl, // Keep this as the default/primary URL
     this.imageCaption,
     required this.category,
     required this.author,
-  });
+    Map<String, dynamic>? mediaDetails, // Add mediaDetails parameter
+  }) : _mediaDetails = mediaDetails; // Initialize _mediaDetails
   
   // Extract the image sizes from the media object
   static String _extractImageUrl(Map<String, dynamic> media) {
@@ -80,10 +82,34 @@ class NewsArticle {
     return 'Regio'; // Default if no category found
   }
 
+  // New method to get image URL based on context
+  String getImageUrlForContext(String context) {
+    final sizes = _mediaDetails?['sizes'];
+    final sourceUrl = _mediaDetails?['source_url'] ?? imageUrl; // Fallback to original imageUrl if needed
+
+    if (sizes == null) return sourceUrl; // Return source_url if no sizes available
+
+    switch (context) {
+      case 'featured':
+        return sizes['large']?['source_url'] ??
+               sizes['medium_large']?['source_url'] ??
+               sourceUrl; // Fallback to source_url
+      case 'list_item':
+        // Prefer medium for list items, fallback to thumbnail, then source_url
+        return sizes['medium']?['source_url'] ??
+               sizes['thumbnail']?['source_url'] ??
+               sourceUrl; // Fallback to source_url
+      default:
+        // Default to the primary imageUrl (which should be large/medium_large)
+        return imageUrl;
+    }
+  }
+
   // Create a NewsArticle object from JSON data
   factory NewsArticle.fromJson(Map<String, dynamic> json) {
     final featuredMedia = json['_embedded']?['wp:featuredmedia'];
     final media = featuredMedia != null && featuredMedia.isNotEmpty ? featuredMedia[0] : null;
+    final mediaDetails = media?['media_details']; // Extract media_details
     
     // Handle class_list safely
     List<dynamic>? classList;
@@ -115,12 +141,14 @@ class NewsArticle {
       content: json['content']?['rendered'] ?? '',
       excerpt: excerpt,
       link: json['link'] ?? '',
+      // Set imageUrl to the largest available as default
       imageUrl: media != null ? _extractImageUrl(media) : '',
       imageCaption: media?['caption']?['rendered'] != null
           ? htmlparser.parse(media!['caption']['rendered']).body?.text
           : null,
       category: _getCategoryFromClassList(classList),
       author: predefinedNames[json['author']] ?? 'Onbekend: ${json['author']}',
+      mediaDetails: mediaDetails, // Pass media details to constructor
     );
   }
 }
@@ -130,12 +158,11 @@ class NewsService {
   
   static Future<List<NewsArticle>> getNews({
     int page = 1, 
-    int perPage = 11,
-    int skipFirst = 0,
+    int perPage = 15, // Default to full page count
   }) async {
     try {
       LogService.log(
-        'Fetching news from: $_baseUrl?per_page=$perPage&page=$page (skip: $skipFirst)', 
+        'Fetching news from: $_baseUrl?per_page=$perPage&page=$page', // Removed skip log
         category: 'news_api'
       );
       
@@ -153,20 +180,19 @@ class NewsService {
           return [];
         }
         
-        // Skip the first n articles if specified
-        final processedData = skipFirst > 0 ? data.skip(skipFirst).toList() : data;
-        
-        return processedData.map((json) => NewsArticle.fromJson(json)).toList();
+        return data.map((json) => NewsArticle.fromJson(json)).toList(); // Use data directly
       } else {
         LogService.log(
           'Failed to load news: ${response.statusCode} - ${response.body}', 
           category: 'news_error'
         );
-        return [];
+        // Return empty list on failure to prevent breaking the UI flow
+        return []; 
       }
     } catch (e) {
       LogService.log('Error fetching news: $e', category: 'news_error');
-      return [];
+      // Return empty list on error
+      return []; 
     }
   }
 
@@ -174,13 +200,12 @@ class NewsService {
     required int categoryId,
     int page = 1, 
     int perPage = 15,
-    int skipFirst = 0,
   }) async {
     try {
       final categoryUrl = 'https://api.omroepapeldoorn.nl/api/categorie?per_page=$perPage&page=$page&categorie=$categoryId&_embed=true';
       
       LogService.log(
-        'Fetching category news from: $categoryUrl (skip: $skipFirst)', 
+        'Fetching category news from: $categoryUrl', // Removed skip log
         category: 'news_api'
       );
       
@@ -196,10 +221,7 @@ class NewsService {
           return [];
         }
         
-        // Skip the first n articles if specified
-        final processedData = skipFirst > 0 ? data.skip(skipFirst).toList() : data;
-        
-        return processedData.map((json) => NewsArticle.fromJson(json)).toList();
+        return data.map((json) => NewsArticle.fromJson(json)).toList(); // Use data directly
       } else if (response.statusCode == 429) {
         // Handle rate limiting with a small delay and retry
         LogService.log('Rate limited (429), waiting briefly before retry', category: 'news_api');
@@ -215,17 +237,17 @@ class NewsService {
             return [];
           }
           
-          final processedData = skipFirst > 0 ? data.skip(skipFirst).toList() : data;
-          return processedData.map((json) => NewsArticle.fromJson(json)).toList();
+          return data.map((json) => NewsArticle.fromJson(json)).toList(); // Use data directly
         }
         
-        throw '${response.statusCode} - ${response.body}';
+        throw '${retryResponse.statusCode} - ${retryResponse.body}'; // Throw error from retry
       } else {
         throw '${response.statusCode} - ${response.body}';
       }
     } catch (e) {
       LogService.log('Error fetching category news: $e', category: 'news_error');
-      rethrow;
+      // Rethrow to allow UI to handle error state based on empty list or exception
+      rethrow; 
     }
   }
 }
