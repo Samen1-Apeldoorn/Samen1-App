@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'package:permission_handler/permission_handler.dart'; // Import permission_handler
 import 'Navigation/category_navigation.dart'; // This now imports NewsPage indirectly
 import 'Pages/Radio/radio_page.dart';
 import 'Pages/TV/tv_page.dart';
@@ -18,7 +19,11 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LogService.log('Application starting', category: 'app_lifecycle');
-  
+
+  // Check notification permissions early
+  final permissionStatus = await NotificationService.checkNotificationPermissionStatus();
+  LogService.log('Initial notification permission status: $permissionStatus', category: 'app_lifecycle');
+
   // Initialize just_audio_background
   await JustAudioBackground.init(
     androidNotificationChannelId: 'com.example.samen1appv5.channel.audio',
@@ -43,9 +48,9 @@ void main() async {
     systemNavigationBarIconBrightness: Brightness.dark,
   ));
 
-  // Initialize notifications first
+  // Initialize notifications plugin AFTER checking permissions
   await NotificationService.initialize();
-  LogService.log('Notification service initialized', category: 'initialization');
+  LogService.log('Notification service plugin initialized', category: 'initialization');
   
   // Update the Workmanager initialization
   try {
@@ -59,6 +64,49 @@ void main() async {
   }
   
   runApp(const MyApp());
+
+  // Show dialog if permission was denied (after runApp to have context)
+  if (permissionStatus.isPermanentlyDenied || permissionStatus.isDenied) {
+     // Use a post-frame callback to ensure the navigator is ready
+     WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (navigatorKey.currentContext != null) {
+           _showPermissionDeniedDialog(navigatorKey.currentContext!);
+        }
+     });
+  }
+}
+
+// Function to show the permission denied dialog
+void _showPermissionDeniedDialog(BuildContext context) {
+  LogService.log('Showing notification permission denied dialog', category: 'permissions');
+  showDialog(
+    context: context,
+    barrierDismissible: false, // User must interact
+    builder: (context) => AlertDialog(
+      title: const Text('Meldingen Uitgeschakeld'),
+      content: const Text(
+        'Je hebt meldingen voor deze app uitgeschakeld. '
+        'Om nieuwsupdates te ontvangen, moet je de toestemming inschakelen via de app-instellingen.'
+      ),
+      actions: [
+        TextButton(
+          onPressed: () {
+            LogService.log('User dismissed permission denied dialog', category: 'permissions');
+            Navigator.of(context).pop();
+          },
+          child: const Text('Later'),
+        ),
+        TextButton(
+          onPressed: () async {
+            LogService.log('User requests opening app settings from dialog', category: 'permissions');
+            Navigator.of(context).pop();
+            await openAppSettings(); // From permission_handler
+          },
+          child: const Text('Open Instellingen'),
+        ),
+      ],
+    ),
+  );
 }
 
 

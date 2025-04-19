@@ -114,7 +114,7 @@ class _RadioPageState extends State<RadioPage> {
   void _setupPeriodicStreamInfoUpdates() {
     LogService.log('RadioPage: Setting up periodic stream info updates (30s interval)', category: 'radio');
     _streamInfoTimer?.cancel(); // Cancel previous timer if any
-    _streamInfoTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+    _streamInfoTimer = Timer.periodic(const Duration(seconds: 30), (_) { 
       // Only fetch if player is initialized and page is mounted
       if (_isPlayerInitialized && mounted) {
         LogService.log('RadioPage: Periodic stream info update triggered', category: 'radio_detail');
@@ -147,22 +147,24 @@ class _RadioPageState extends State<RadioPage> {
        LogService.log('RadioPage: Skipping fetchStreamInfo - player not initialized.', category: 'radio_warning');
        return;
     }
+    // Keep track if this was the initial load where info was loading
+    final bool wasLoadingInfo = _isLoadingInfo;
     try {
       LogService.log('RadioPage: Fetching stream info from $_radioInfoUrl', category: 'radio_detail');
       final response = await http.get(Uri.parse(_radioInfoUrl));
-      
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         final nowPlaying = data['nowplaying'] ?? 'Onbekend nummer';
         final coverArt = data['coverart'] ?? '';
-        
+
         LogService.log(
-          'RadioPage: Stream info fetched - Now Playing: "$nowPlaying"', 
+          'RadioPage: Stream info fetched - Now Playing: "$nowPlaying"',
           category: 'radio'
         );
 
         // --- Define coverUrl outside setState ---
-        String processedCoverUrl = coverArt; 
+        String processedCoverUrl = coverArt;
         if (processedCoverUrl.isNotEmpty && processedCoverUrl.contains('mzstatic.com')) {
           final int lastSlashIndex = processedCoverUrl.lastIndexOf('/');
           if (lastSlashIndex != -1) {
@@ -178,20 +180,22 @@ class _RadioPageState extends State<RadioPage> {
         // Check if info actually changed before calling setState or updating media item
         final bool trackChanged = _currentTrack != nowPlaying;
         final bool artChanged = _coverArtUrl != processedCoverUrl; // Compare state variable with processed URL
-        
-        if (mounted && (trackChanged || artChanged || _isLoadingInfo)) { // Also update if it was loading info
+
+        // Update UI state if needed (track/art changed or initial load)
+        if (mounted && (trackChanged || artChanged || wasLoadingInfo)) {
           setState(() {
             _currentTrack = nowPlaying;
             _coverArtUrl = processedCoverUrl; // Assign processed URL to state variable
-            _isLoadingInfo = false;
+            _isLoadingInfo = false; // Mark info as loaded
           });
         }
-        
-        // Update the notification ONLY if playing AND if track info or artwork actually changed
-        if (_isPlaying && (trackChanged || artChanged)) {
-          LogService.log('RadioPage: Updating media notification because track or art changed.', category: 'radio');
-          // _updateMediaItem uses the state variable _coverArtUrl which was just updated in setState
-          _updateMediaItem(); 
+
+        // Update the notification if track info or artwork changed, OR if it was the initial load.
+        // This ensures the notification gets the correct info ASAP.
+        if (trackChanged || artChanged || wasLoadingInfo) {
+          LogService.log('RadioPage: Updating media notification (data changed or initial load).', category: 'radio');
+          // _updateMediaItem uses the state variables which were just updated in setState
+          _updateMediaItem();
         }
       } else {
         LogService.log(
@@ -205,7 +209,7 @@ class _RadioPageState extends State<RadioPage> {
       }
     } catch (e, stack) {
       LogService.log(
-        'RadioPage: Error fetching stream info: $e\n$stack', 
+        'RadioPage: Error fetching stream info: $e\n$stack',
         category: 'radio_error'
       );
       if (mounted && _isLoadingInfo) { // Ensure loading indicator is turned off on error

@@ -85,10 +85,12 @@ class AudioService {
         tag: MediaItem(
           id: radioStationId,
           title: radioStationName,
-          artist: 'Live Stream',
+          // Use station name initially instead of 'Live Stream'
+          artist: radioStationName,
           artUri: Uri.parse(fallbackArtworkUrl),
           displayTitle: radioStationName,
-          displaySubtitle: 'Live Stream',
+          // Use station name initially instead of 'Live Stream'
+          displaySubtitle: radioStationName,
         ),
       );
       
@@ -118,6 +120,11 @@ class AudioService {
     required String artist,
     required String artworkUrl,
   }) async {
+    // Ensure player has an audio source before trying to update
+    if (player.audioSource == null) {
+       LogService.log('AudioService: Cannot update media item, player has no audio source.', category: 'audio_warning');
+       return;
+    }
     try {
       LogService.log(
         'AudioService: Updating media item via setAudioSource - Title: "$title", Artist: "$artist"',
@@ -145,7 +152,9 @@ class AudioService {
       );
 
       // Use setAudioSource to apply the changes. preload: false might help reduce interruption.
-      await player.setAudioSource(audioSource, preload: false, initialPosition: player.position); // Try preserving position
+      // Preserve position if possible
+      final currentPosition = player.position;
+      await player.setAudioSource(audioSource, preload: false, initialPosition: currentPosition);
       LogService.log('AudioService: Audio source reset with new media item tag.', category: 'audio_update');
 
     } catch (e, stack) {

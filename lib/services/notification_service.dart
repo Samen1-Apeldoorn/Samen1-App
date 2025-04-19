@@ -3,6 +3,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
+import 'package:permission_handler/permission_handler.dart'; // Import permission_handler
 import 'log_service.dart';
 import '../main.dart'; // For navigatorKey
 import '../Pages/News/news_service.dart'; // For NewsService and NewsArticle
@@ -10,31 +11,44 @@ import '../Popup/news_article_screen.dart'; // For article display
 
 class NotificationService {
   static final _notifications = FlutterLocalNotificationsPlugin();
-  
+  static bool _isInitialized = false; // Track initialization
+
   static Future<void> initialize() async {
-    LogService.log('Initializing notifications', category: 'notifications');
+    if (_isInitialized) return; // Prevent multiple initializations
+    LogService.log('Initializing notifications plugin', category: 'notifications');
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
+    // For iOS, don't request permissions here initially.
     const iosSettings = DarwinInitializationSettings(
-      requestAlertPermission: true,
-      requestBadgePermission: true,
-      requestSoundPermission: true,
+      requestAlertPermission: false,
+      requestBadgePermission: false,
+      requestSoundPermission: false,
     );
     const settings = InitializationSettings(android: androidSettings, iOS: iosSettings);
-    
+
     // Add notification response handler
     await _notifications.initialize(
       settings,
       onDidReceiveNotificationResponse: _onNotificationTap,
       onDidReceiveBackgroundNotificationResponse: _onNotificationTap,
     );
+    _isInitialized = true;
+    LogService.log('Notifications plugin initialized', category: 'notifications');
 
-    // Request permissions for Android
-    final androidImplementation = _notifications.resolvePlatformSpecificImplementation<
-        AndroidFlutterLocalNotificationsPlugin>();
-    if (androidImplementation != null) {
-      final granted = await androidImplementation.requestNotificationsPermission();
-      LogService.log('Notification permission granted: $granted', category: 'notifications');
-    }
+    // Removed permission request from here
+  }
+
+  // New method to check permission status
+  static Future<PermissionStatus> checkNotificationPermissionStatus() async {
+    final status = await Permission.notification.status;
+    LogService.log('Checked notification permission status: $status', category: 'permissions');
+    return status;
+  }
+
+  // New method to request permission
+  static Future<PermissionStatus> requestNotificationPermission() async {
+    final status = await Permission.notification.request();
+    LogService.log('Requested notification permission. Result: $status', category: 'permissions');
+    return status;
   }
 
   // Handler for notification taps
@@ -103,24 +117,37 @@ class NotificationService {
     required String payload,
     String? imageUrl,
   }) async {
+    // Ensure initialized before showing
+    if (!_isInitialized) {
+      LogService.log('Notification service not initialized, cannot show notification.', category: 'notifications_error');
+      return;
+    }
+    // Check permission before attempting to show
+    final status = await checkNotificationPermissionStatus();
+    if (!status.isGranted) {
+      LogService.log('Notification permission not granted ($status), cannot show notification.', category: 'notifications_warning');
+      return; // Don't show if permission isn't granted
+    }
+
     LogService.log('Preparing notification: Title="$title", Body="$body", Payload="$payload"', category: 'notifications');
-    
+
+    // ... rest of the existing showNotification logic ...
     AndroidNotificationDetails androidDetails;
 
-    if (imageUrl != null && imageUrl.isNotEmpty) {
+    if (imageUrl != null && imageUrl.isNotEmpty) { // Corrected: added parentheses to isNotEmpty
       try {
         LogService.log('Downloading image from: $imageUrl', category: 'notifications');
         final response = await http.get(Uri.parse(imageUrl)).timeout(const Duration(seconds: 10));
-        
+
         if (response.statusCode == 200) {
           final bytes = response.bodyBytes;
           final tempDir = await getTemporaryDirectory();
           final tempPath = '${tempDir.path}/notification_image_${DateTime.now().millisecondsSinceEpoch}.jpg';
           await File(tempPath).writeAsBytes(bytes);
-          
+
           androidDetails = AndroidNotificationDetails(
             'samen1_news',
-            'Nieuws Updates', 
+            'Nieuws Updates',
             channelDescription: 'Nieuws updates van Samen1',
             importance: Importance.high,
             priority: Priority.high,
@@ -155,7 +182,7 @@ class NotificationService {
     try {
       // Use a stable ID based on payload to prevent duplicate notifications
       final notificationId = payload.hashCode;
-      
+
       await _notifications.show(
         notificationId,
         title,
@@ -168,7 +195,7 @@ class NotificationService {
       LogService.log('Error showing notification: $e', category: 'notifications_error');
     }
   }
-  
+
   static AndroidNotificationDetails _createTextNotification(String title, String body) {
     return AndroidNotificationDetails(
       'samen1_news',

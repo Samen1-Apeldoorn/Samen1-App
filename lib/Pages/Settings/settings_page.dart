@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:workmanager/workmanager.dart';
+import 'package:permission_handler/permission_handler.dart'; // Import permission_handler
 import '../../services/rss_service.dart';
 import '../../services/notification_service.dart';
 import '../../services/log_service.dart';
@@ -17,6 +18,7 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _notificationsEnabled = false;
+  PermissionStatus _notificationStatus = PermissionStatus.denied; // Store permission status
   final AudioService _audioService = AudioService(); // Use the singleton AudioService
   bool _isRadioPlaying = false;
   final List<String> _categories = ["Regio", "112", "Gemeente", "Politiek", "Evenementen", "Cultuur"];
@@ -50,77 +52,157 @@ class _SettingsPageState extends State<SettingsPage> {
 
   Future<void> _loadSettings() async {
     try {
-      LogService.log('SettingsPage: Loading user preferences', category: 'settings');
+      LogService.log('SettingsPage: Loading user preferences and checking permission', category: 'settings');
       final prefs = await SharedPreferences.getInstance();
-      
-      final notificationsEnabled = prefs.getBool('notifications_enabled') ?? false;
+      final permissionStatus = await NotificationService.checkNotificationPermissionStatus();
+
+      // Load saved preference, default to false
+      final savedNotificationsPref = prefs.getBool('notifications_enabled') ?? false;
       final enabledCategories = prefs.getStringList('enabled_categories') ?? _categories.toList();
-      
+
+      // Determine actual enabled state based on permission
+      final bool actualNotificationsEnabled = savedNotificationsPref && permissionStatus.isGranted;
+
       LogService.log(
-        'SettingsPage: Loaded preferences - Notifications: $notificationsEnabled, '
+        'SettingsPage: Loaded preferences - SavedPref: $savedNotificationsPref, Permission: $permissionStatus, ActualEnabled: $actualNotificationsEnabled, '
         'Categories: ${enabledCategories.join(", ")}',
         category: 'settings'
       );
-      
-      setState(() {
-        _notificationsEnabled = notificationsEnabled;
-        _enabledCategories = enabledCategories;
-      });
+
+      if (mounted) {
+        setState(() {
+          _notificationStatus = permissionStatus;
+          _notificationsEnabled = actualNotificationsEnabled;
+          // Only keep categories if actually enabled
+          _enabledCategories = actualNotificationsEnabled ? enabledCategories : [];
+        });
+
+        // If saved pref was true but permission isn't granted, update saved pref to false
+        if (savedNotificationsPref && !permissionStatus.isGranted) {
+           LogService.log('SettingsPage: Permission not granted, updating saved preference to false', category: 'settings');
+           await prefs.setBool('notifications_enabled', false);
+           // Also clear saved categories if they existed
+           if (enabledCategories.isNotEmpty) {
+              await prefs.setStringList('enabled_categories', []);
+           }
+        }
+      }
     } catch (e, stack) {
       LogService.log(
         'SettingsPage: Error loading settings: $e\n$stack', 
         category: 'settings_error'
       );
-      // If there's an error, use default values
+      // If there's an error, use default values and assume denied
+      if (mounted) {
+        setState(() {
+          _notificationStatus = PermissionStatus.denied;
+          _notificationsEnabled = false;
+          _enabledCategories = [];
+        });
+      }
+    }
+  }
+
+  // Modified save settings to handle permission request flow
+  Future<void> _handleNotificationToggle(bool value) async {
+    if (!mounted) return;
+
+    if (value) {
+      // Trying to enable notifications
+      LogService.log('SettingsPage: User attempting to enable notifications', category: 'settings');
+      final status = await NotificationService.requestNotificationPermission();
+      setState(() { _notificationStatus = status; }); // Update status
+
+      if (status.isGranted) {
+        LogService.log('SettingsPage: Permission granted. Enabling notifications.', category: 'settings');
+        setState(() {
+          _notificationsEnabled = true;
+          _enabledCategories = _categories.toList(); // Enable all by default
+        });
+        await _saveAndConfigureNotifications(true); // Save and register task
+      } else if (status.isPermanentlyDenied) {
+        LogService.log('SettingsPage: Permission permanently denied.', category: 'settings_warning');
+        setState(() { _notificationsEnabled = false; }); // Keep disabled
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: const Text('Meldingen zijn geblokkeerd. Schakel ze in via app-instellingen.'),
+              action: SnackBarAction(
+                label: 'Instellingen',
+                onPressed: openAppSettings,
+              ),
+            ),
+          );
+        }
+      } else { // Denied but not permanently
+        LogService.log('SettingsPage: Permission denied.', category: 'settings_warning');
+        setState(() { _notificationsEnabled = false; }); // Keep disabled
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Toestemming voor meldingen is vereist.')),
+          );
+        }
+      }
+    } else {
+      // Disabling notifications
+      LogService.log('SettingsPage: User disabling notifications', category: 'settings');
       setState(() {
         _notificationsEnabled = false;
-        _enabledCategories = _categories.toList();
+        _enabledCategories.clear();
       });
+      await _saveAndConfigureNotifications(false); // Save and cancel task
     }
   }
 
-  Future<void> _saveSettings() async {
-    try {
-      LogService.log(
-        'SettingsPage: Saving settings - Notifications: $_notificationsEnabled, '
-        'Categories: ${_enabledCategories.join(", ")}', 
-        category: 'settings'
-      );
-      
-      final prefs = await SharedPreferences.getInstance();
-      await prefs.setBool('notifications_enabled', _notificationsEnabled);
-      await prefs.setStringList('enabled_categories', _enabledCategories);
 
-      if (_notificationsEnabled) {
-        LogService.log(
-          'SettingsPage: Setting up background tasks with 15 minute interval', 
-          category: 'settings'
-        );
-        
-        await Workmanager().registerPeriodicTask(
-          'samen1-rss-check',
-          'checkRSSFeed',
-          frequency: const Duration(minutes: 15),
-        );
-      } else {
-        LogService.log('SettingsPage: Canceling background tasks', category: 'settings');
-        await Workmanager().cancelByUniqueName('samen1-rss-check');
-      }
-      
-      LogService.log('SettingsPage: Settings saved successfully', category: 'settings');
-    } catch (e, stack) {
-      LogService.log(
-        'SettingsPage: Error saving settings: $e\n$stack', 
-        category: 'settings_error'
-      );
-      
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Kon instellingen niet opslaan. Probeer het later opnieuw.'))
-        );
-      }
-    }
+  // Extracted saving logic
+  Future<void> _saveAndConfigureNotifications(bool enable) async {
+     try {
+       LogService.log(
+         'SettingsPage: Saving settings - Notifications: $enable, '
+         'Categories: ${_enabledCategories.join(", ")}',
+         category: 'settings'
+       );
+
+       final prefs = await SharedPreferences.getInstance();
+       await prefs.setBool('notifications_enabled', enable);
+       await prefs.setStringList('enabled_categories', _enabledCategories);
+
+       if (enable) {
+         LogService.log(
+           'SettingsPage: Setting up background tasks with 15 minute interval',
+           category: 'settings'
+         );
+
+         await Workmanager().registerPeriodicTask(
+           'samen1-rss-check',
+           'checkRSSFeed',
+           frequency: const Duration(minutes: 15),
+           // Add constraints if needed, e.g., network connectivity
+           // constraints: Constraints(networkType: NetworkType.connected),
+         );
+       } else {
+         LogService.log('SettingsPage: Canceling background tasks', category: 'settings');
+         await Workmanager().cancelByUniqueName('samen1-rss-check');
+       }
+
+       LogService.log('SettingsPage: Settings saved and tasks configured successfully', category: 'settings');
+     } catch (e, stack) {
+       LogService.log(
+         'SettingsPage: Error saving settings or configuring tasks: $e\n$stack',
+         category: 'settings_error'
+       );
+
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+           const SnackBar(content: Text('Kon instellingen niet opslaan. Probeer het later opnieuw.'))
+         );
+         // Revert UI state if saving failed? Maybe not, could cause confusion.
+         // setState(() { _notificationsEnabled = !enable; });
+       }
+     }
   }
+
 
   Future<void> _stopBackgroundRadio() async {
     try {
@@ -162,6 +244,7 @@ class _SettingsPageState extends State<SettingsPage> {
     }
   }
 
+  // Restored original function to show battery optimization instructions
   Future<void> _openBatterySettings() async {
     LogService.log('Battery optimization help requested', category: 'settings');
     if (mounted) {
@@ -365,6 +448,9 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   Widget _buildNotificationSettings() {
+    // Determine if the switch should be visually disabled
+    final bool isPermanentlyDenied = _notificationStatus.isPermanentlyDenied;
+
     return ExpansionTile(
       title: Text(
         'Meldingen',
@@ -378,21 +464,18 @@ class _SettingsPageState extends State<SettingsPage> {
       children: [
         SwitchListTile(
           title: const Text('Meldingen inschakelen'),
-          subtitle: const Text('Ontvang meldingen bij nieuwe artikelen'),
+          subtitle: Text(isPermanentlyDenied
+              ? 'Toestemming geblokkeerd in instellingen'
+              : 'Ontvang meldingen bij nieuwe artikelen'),
           value: _notificationsEnabled,
-          onChanged: (value) {
-            setState(() {
-              _notificationsEnabled = value;
-              if (value) {
-                _enabledCategories = _categories.toList();
-              } else {
-                _enabledCategories.clear();
-              }
-            });
-            _saveSettings();
-          },
+          // Disable interaction if permanently denied
+          onChanged: isPermanentlyDenied ? null : _handleNotificationToggle,
+          // Visually grey out if permanently denied
+          activeColor: isPermanentlyDenied ? Colors.grey : null,
+          inactiveThumbColor: isPermanentlyDenied ? Colors.grey[400] : null,
         ),
-        if (_notificationsEnabled) ...[
+        // Conditionally show category selection only if enabled AND permission granted
+        if (_notificationsEnabled && _notificationStatus.isGranted) ...[
           const Padding(
             padding: EdgeInsets.fromLTRB(16, 8, 16, 4),
             child: Text(
@@ -420,7 +503,8 @@ class _SettingsPageState extends State<SettingsPage> {
                         _enabledCategories.add(category);
                       }
                     });
-                    _saveSettings();
+                    // Save category changes immediately (only if notifications are enabled)
+                    _saveAndConfigureNotifications(true);
                   },
                   child: Container(
                     decoration: BoxDecoration(
@@ -445,22 +529,27 @@ class _SettingsPageState extends State<SettingsPage> {
             ),
           ),
         ],
+        // Test notification button - maybe disable if permission not granted?
         ListTile(
           title: const Text('Test melding'),
           subtitle: const Text('Stuur een test melding om te controleren'),
           trailing: IconButton(
             icon: const Icon(Icons.notifications_active),
-            onPressed: _sendTestNotification,
+            // Only allow sending if permission is granted
+            onPressed: _notificationStatus.isGranted ? _sendTestNotification : null,
           ),
+          enabled: _notificationStatus.isGranted, // Visually disable if no permission
         ),
+        // Reverted Battery Optimization ListTile for Android
         if (Theme.of(context).platform == TargetPlatform.android)
           ListTile(
             title: const Text('Batterij optimalisatie'),
-            subtitle: const Text('Schakel batterij optimalisatie uit voor betrouwbare meldingen'),
+            subtitle: const Text('Schakel batterij optimalisatie uit voor betrouwbare meldingen'), // Kept updated subtitle
             trailing: IconButton(
-              icon: const Icon(Icons.battery_saver),
-              onPressed: _openBatterySettings,
+              icon: const Icon(Icons.battery_saver), // Restored original icon
+              onPressed: _openBatterySettings, // Call the restored function
             ),
+            onTap: _openBatterySettings, // Also allow tapping the tile
           ),
       ],
     );
