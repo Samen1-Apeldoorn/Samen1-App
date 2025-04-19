@@ -120,7 +120,7 @@ class NewsArticle {
           ? htmlparser.parse(media!['caption']['rendered']).body?.text
           : null,
       category: _getCategoryFromClassList(classList),
-      author: predefinedNames[json['author']] ?? ('Onbekend: ' + json['author'].toString()),
+      author: predefinedNames[json['author']] ?? 'Onbekend: ${json['author']}',
     );
   }
 }

@@ -67,14 +67,15 @@ void callbackDispatcher() {
   Workmanager().executeTask((taskName, inputData) async {
     try {
       // Initialize required services for background task
-      WidgetsFlutterBinding.ensureInitialized();
-      await NotificationService.initialize();
+      // WidgetsFlutterBinding.ensureInitialized(); // Might not be needed if not interacting with UI directly
+      // REMOVE: await NotificationService.initialize(); // Do not initialize or request permissions here
       
       // Optional: Remove specific LogService calls if desired
       // LogService.log('Background task started: $taskName', category: 'background_task'); 
       
       if (taskName == 'checkRSSFeed') {
-        await RSSService.checkForNewContent();
+        // Ensure necessary services like LogService are available if needed within RSSService
+        await RSSService.checkForNewContent(); 
       }
       
       // Optional: Remove specific LogService calls if desired
@@ -82,7 +83,8 @@ void callbackDispatcher() {
       return true;
     } catch (e, stack) {
       LogService.log('Background task error: $e\n$stack', category: 'background_task_error');
-      return false;
+      // Ensure error is logged before returning false
+      return false; 
     }
   });
 }
