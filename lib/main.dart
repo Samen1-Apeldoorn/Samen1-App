@@ -113,25 +113,27 @@ void _showPermissionDeniedDialog(BuildContext context) {
 @pragma('vm:entry-point')
 void callbackDispatcher() {
   Workmanager().executeTask((taskName, inputData) async {
+    // Initialize Flutter binding and services for the background isolate
+    WidgetsFlutterBinding.ensureInitialized(); 
+    await NotificationService.initialize(); // Initialize notifications for this isolate
+    // It's generally safe to initialize LogService again if needed, 
+    // assuming its initialization is idempotent or handles multiple calls.
+    // await LogService.initialize(); // If needed by RSSService or NotificationService internally
+
     try {
-      // Initialize required services for background task
-      // WidgetsFlutterBinding.ensureInitialized(); // Might not be needed if not interacting with UI directly
-      // REMOVE: await NotificationService.initialize(); // Do not initialize or request permissions here
-      
-      // Optional: Remove specific LogService calls if desired
-      // LogService.log('Background task started: $taskName', category: 'background_task'); 
+      // LogService should ideally be initialized before use here too
+      LogService.log('Background task started: $taskName', category: 'background_task'); 
       
       if (taskName == 'checkRSSFeed') {
-        // Ensure necessary services like LogService are available if needed within RSSService
+        // Now NotificationService should be initialized when RSSService calls it
         await RSSService.checkForNewContent(); 
       }
       
-      // Optional: Remove specific LogService calls if desired
-      // LogService.log('Background task completed successfully', category: 'background_task');
+      LogService.log('Background task completed successfully: $taskName', category: 'background_task');
       return true;
     } catch (e, stack) {
-      LogService.log('Background task error: $e\n$stack', category: 'background_task_error');
-      // Ensure error is logged before returning false
+      // Ensure LogService is available to log the error
+      LogService.log('Background task error in $taskName: $e\n$stack', category: 'background_task_error');
       return false; 
     }
   });

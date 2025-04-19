@@ -6,7 +6,7 @@ class CategoryInfo {
   final String name;
   final int id;
   
-  const CategoryInfo(this.name, this.id);
+  const CategoryInfo(this.name, this.id); // Added const constructor
 }
 
 class NewsContainer extends StatefulWidget {
@@ -18,6 +18,7 @@ class NewsContainer extends StatefulWidget {
 
 class _NewsContainerState extends State<NewsContainer> {
   // Category definitions with their IDs
+  // Made list const
   static const List<CategoryInfo> _categories = [
     CategoryInfo('Nieuws', 0), // 0 is a special ID for the all news page
     CategoryInfo('112', 67),
@@ -56,12 +57,12 @@ class _NewsContainerState extends State<NewsContainer> {
         automaticallyImplyLeading: false, // Remove the back button
         title: null, // No title text
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(50),
+          preferredSize: const Size.fromHeight(50), // Added const
           child: Container(
             width: double.infinity,
             height: 50,
             color: Theme.of(context).colorScheme.primary,
-            padding: const EdgeInsets.only(bottom: 8, left: 8, right: 8),
+            padding: const EdgeInsets.only(bottom: 8, left: 8, right: 8), // Added const
             alignment: Alignment.center,
             child: ListView.builder(
               scrollDirection: Axis.horizontal,
@@ -71,8 +72,8 @@ class _NewsContainerState extends State<NewsContainer> {
                 return GestureDetector(
                   onTap: () => _onCategorySelected(index),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    margin: const EdgeInsets.symmetric(horizontal: 4),
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Added const
+                    margin: const EdgeInsets.symmetric(horizontal: 4), // Added const
                     decoration: BoxDecoration(
                       color: isSelected 
                         ? Colors.white 
@@ -105,13 +106,15 @@ class _NewsContainerState extends State<NewsContainer> {
   Widget _buildCurrentCategoryPage() {
     // If we're on the main news page (index 0), show the regular NewsPage
     if (_selectedCategoryIndex == 0) {
-      return const NewsPage(key: ValueKey('news-all'), isInContainer: true);
+      // Added const to ValueKey
+      return const NewsPage(key: ValueKey('news-all'), isInContainer: true); 
     }
     
     // Otherwise, show the category-specific page
     final category = _categories[_selectedCategoryIndex];
     return NewsPage(
-      key: ValueKey('news_category_${category.id}'), // Add key for state preservation
+      // ValueKey cannot be const here as category.id is dynamic
+      key: ValueKey('news_category_${category.id}'), 
       categoryId: category.id,
       title: category.name, // Pass title for potential use (though AppBar is handled here)
       isInContainer: true,

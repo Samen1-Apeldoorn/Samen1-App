@@ -137,7 +137,7 @@ class NotificationService {
     if (imageUrl != null && imageUrl.isNotEmpty) { // Corrected: added parentheses to isNotEmpty
       try {
         LogService.log('Downloading image from: $imageUrl', category: 'notifications');
-        final response = await http.get(Uri.parse(imageUrl)).timeout(const Duration(seconds: 10));
+        final response = await http.get(Uri.parse(imageUrl)).timeout(const Duration(seconds: 10)); // Added const
 
         if (response.statusCode == 200) {
           final bytes = response.bodyBytes;
@@ -151,7 +151,7 @@ class NotificationService {
             channelDescription: 'Nieuws updates van Samen1',
             importance: Importance.high,
             priority: Priority.high,
-            color: const Color(0xFFFA6401),
+            color: const Color(0xFFFA6401), // Added const
             styleInformation: BigPictureStyleInformation(
               FilePathAndroidBitmap(tempPath),
               hideExpandedLargeIcon: false,
@@ -176,7 +176,7 @@ class NotificationService {
 
     final notificationDetails = NotificationDetails(
       android: androidDetails,
-      iOS: const DarwinNotificationDetails(presentSound: true),
+      iOS: const DarwinNotificationDetails(presentSound: true), // Added const
     );
 
     try {
@@ -203,7 +203,7 @@ class NotificationService {
       channelDescription: 'Nieuws updates van Samen1',
       importance: Importance.high,
       priority: Priority.high,
-      color: const Color(0xFFFA6401),
+      color: const Color(0xFFFA6401), // Added const
       styleInformation: BigTextStyleInformation(
         body,
         contentTitle: title,
