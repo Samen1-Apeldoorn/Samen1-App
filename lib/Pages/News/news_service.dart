@@ -2,6 +2,7 @@ import 'package:html/parser.dart' as htmlparser;
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import '../../services/log_service.dart';
+import 'dart:async'; // Import async library for Future.delayed
 
 class NewsArticle {
   final int id;
@@ -155,32 +156,62 @@ class NewsArticle {
 
 class NewsService {
   static const String _baseUrl = 'https://api.omroepapeldoorn.nl/api/nieuws';
-  
+  static const String _categoryBaseUrl = 'https://api.omroepapeldoorn.nl/api/categorie';
+
+  // Cache storage
+  static final Map<String, List<NewsArticle>> _newsCache = {};
+  static final Map<String, DateTime> _cacheTimestamps = {};
+  static const Duration _cacheDuration = Duration(minutes: 10); // Cache validity duration
+  static const Duration _cacheReturnDelay = Duration(milliseconds: 150); // Artificial delay for cached data
+
+  // Helper to generate cache key
+  static String _getCacheKey({int? categoryId, required int page}) {
+    return "cat_${categoryId ?? 'all'}_page_$page";
+  }
+
+  // Helper to check cache validity
+  static bool _isCacheValid(String key) {
+    final timestamp = _cacheTimestamps[key];
+    if (timestamp == null) return false;
+    return DateTime.now().difference(timestamp) < _cacheDuration;
+  }
+
   static Future<List<NewsArticle>> getNews({
     int page = 1, 
-    int perPage = 15, // Default to full page count
+    int perPage = 15,
+    bool forceRefresh = false, // Add forceRefresh parameter
   }) async {
+    final cacheKey = _getCacheKey(page: page); // No categoryId for general news
+
+    // Check cache first, unless forceRefresh is true
+    if (!forceRefresh && _isCacheValid(cacheKey)) {
+      LogService.log('Returning cached news for page $page after delay', category: 'news_cache');
+      // Add a small delay before returning cached data
+      await Future.delayed(_cacheReturnDelay); 
+      return _newsCache[cacheKey]!;
+    }
+
+    // Fetch from API if cache is invalid or forceRefresh is true
+    final url = '$_baseUrl?per_page=$perPage&page=$page&_embed=true';
+    LogService.log(
+      'Fetching news from API: $url (ForceRefresh: $forceRefresh)', 
+      category: 'news_api'
+    );
+
     try {
-      LogService.log(
-        'Fetching news from: $_baseUrl?per_page=$perPage&page=$page', // Removed skip log
-        category: 'news_api'
-      );
-      
-      final response = await http.get(
-        Uri.parse('$_baseUrl?per_page=$perPage&page=$page&_embed=true')
-      );
-      
+      final response = await http.get(Uri.parse(url));
       LogService.log('API response status: ${response.statusCode}', category: 'news_api');
       
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        LogService.log('Received ${data.length} articles from API', category: 'news_api');
+        final articles = data.map((json) => NewsArticle.fromJson(json)).toList();
         
-        if (data.isEmpty) {
-          return [];
-        }
+        // Update cache
+        _newsCache[cacheKey] = articles;
+        _cacheTimestamps[cacheKey] = DateTime.now();
+        LogService.log('Fetched and cached ${articles.length} articles for page $page', category: 'news_cache');
         
-        return data.map((json) => NewsArticle.fromJson(json)).toList(); // Use data directly
+        return articles;
       } else {
         LogService.log(
           'Failed to load news: ${response.statusCode} - ${response.body}', 
@@ -200,54 +231,72 @@ class NewsService {
     required int categoryId,
     int page = 1, 
     int perPage = 15,
+    bool forceRefresh = false, // Add forceRefresh parameter
   }) async {
+    final cacheKey = _getCacheKey(categoryId: categoryId, page: page);
+
+    // Check cache first, unless forceRefresh is true
+    if (!forceRefresh && _isCacheValid(cacheKey)) {
+      LogService.log('Returning cached news for category $categoryId, page $page after delay', category: 'news_cache');
+      // Add a small delay before returning cached data
+      await Future.delayed(_cacheReturnDelay);
+      return _newsCache[cacheKey]!;
+    }
+
+    // Fetch from API if cache is invalid or forceRefresh is true
+    final url = '$_categoryBaseUrl?per_page=$perPage&page=$page&categorie=$categoryId&_embed=true';
+    LogService.log(
+      'Fetching category news from API: $url (ForceRefresh: $forceRefresh)', 
+      category: 'news_api'
+    );
+
     try {
-      final categoryUrl = 'https://api.omroepapeldoorn.nl/api/categorie?per_page=$perPage&page=$page&categorie=$categoryId&_embed=true';
-      
-      LogService.log(
-        'Fetching category news from: $categoryUrl', // Removed skip log
-        category: 'news_api'
-      );
-      
-      final response = await http.get(Uri.parse(categoryUrl));
-      
+      final response = await http.get(Uri.parse(url));
       LogService.log('API response status: ${response.statusCode}', category: 'news_api');
       
       if (response.statusCode == 200) {
         final List<dynamic> data = json.decode(response.body);
-        LogService.log('Received ${data.length} category articles from API', category: 'news_api');
-        
-        if (data.isEmpty) {
-          return [];
-        }
-        
-        return data.map((json) => NewsArticle.fromJson(json)).toList(); // Use data directly
+        final articles = data.map((json) => NewsArticle.fromJson(json)).toList();
+
+        // Update cache
+        _newsCache[cacheKey] = articles;
+        _cacheTimestamps[cacheKey] = DateTime.now();
+        LogService.log('Fetched and cached ${articles.length} articles for category $categoryId, page $page', category: 'news_cache');
+
+        return articles;
       } else if (response.statusCode == 429) {
-        // Handle rate limiting with a small delay and retry
+        // Handle rate limiting (retry logic remains the same)
         LogService.log('Rate limited (429), waiting briefly before retry', category: 'news_api');
         await Future.delayed(const Duration(milliseconds: 500));
         
-        // Retry the request once
-        final retryResponse = await http.get(Uri.parse(categoryUrl));
+        final retryResponse = await http.get(Uri.parse(url));
         if (retryResponse.statusCode == 200) {
           final List<dynamic> data = json.decode(retryResponse.body);
-          LogService.log('Retry successful, received ${data.length} category articles', category: 'news_api');
-          
-          if (data.isEmpty) {
-            return [];
-          }
-          
-          return data.map((json) => NewsArticle.fromJson(json)).toList(); // Use data directly
+          final articles = data.map((json) => NewsArticle.fromJson(json)).toList();
+
+          // Update cache on successful retry
+          _newsCache[cacheKey] = articles;
+          _cacheTimestamps[cacheKey] = DateTime.now();
+          LogService.log('Retry successful, cached ${articles.length} category articles for page $page', category: 'news_cache');
+
+          return articles;
         }
         
-        throw '${retryResponse.statusCode} - ${retryResponse.body}'; // Throw error from retry
+        LogService.log(
+          'Failed to load category news after retry: ${retryResponse.statusCode} - ${retryResponse.body}', 
+          category: 'news_error'
+        );
+        return []; // Return empty on retry failure
       } else {
-        throw '${response.statusCode} - ${response.body}';
+         LogService.log(
+          'Failed to load category news: ${response.statusCode} - ${response.body}', 
+          category: 'news_error'
+        );
+        return []; // Return empty on other failures
       }
     } catch (e) {
       LogService.log('Error fetching category news: $e', category: 'news_error');
-      // Rethrow to allow UI to handle error state based on empty list or exception
-      rethrow; 
+      return []; // Return empty on exception
     }
   }
 }
