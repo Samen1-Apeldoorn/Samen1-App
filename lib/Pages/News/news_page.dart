@@ -199,8 +199,8 @@ class _NewsPageState extends State<NewsPage> {
     try {
       // Use correct service method based on categoryId
       final List<NewsArticle> fetchedArticles = widget.categoryId == null
-          ? await NewsService.getNews(page: 1, perPage: _fullPageCount)
-          : await NewsService.getNewsByCategory(categoryId: widget.categoryId!, page: 1, perPage: _fullPageCount);
+          ? await NewsService.getNews(page: 1, perPage: _fullPageCount, forceRefresh: true)
+          : await NewsService.getNewsByCategory(categoryId: widget.categoryId!, page: 1, perPage: _fullPageCount, forceRefresh: true);
 
       if (!mounted) return;
 
