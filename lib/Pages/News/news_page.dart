@@ -11,10 +11,14 @@ enum LoadState { initial, loadingInitial, loadingMore, preloading, refreshing, i
 
 class NewsPage extends StatefulWidget {
   final bool isInContainer;
-  
+  final int? categoryId; // Optional category ID
+  final String? title;    // Optional title for AppBar
+
   const NewsPage({
     super.key, 
     this.isInContainer = false,
+    this.categoryId,     // Add categoryId parameter
+    this.title,          // Add title parameter
   });
 
   @override
@@ -37,7 +41,7 @@ class _NewsPageState extends State<NewsPage> {
     // Load the first full page directly
     _loadNews(isInitialLoad: true); 
     _scrollController.addListener(_scrollListener);
-    LogService.log('News page opened', category: 'news');
+    LogService.log('News page opened ${widget.categoryId != null ? 'for category ${widget.categoryId}' : 'for general news'}', category: 'news');
   }
 
   @override
@@ -77,17 +81,20 @@ class _NewsPageState extends State<NewsPage> {
     }
   }
 
-  // Updated preload function using LoadState
+  // Updated preload function using LoadState and categoryId
   Future<void> _preloadNextPage() async {
     final pageToPreload = _currentPage; // Preload the page we expect to load next
     if (_loadState == LoadState.preloading || !_hasMoreArticles || !mounted) return;
     
     // Set state without setState for background task
     _loadState = LoadState.preloading; 
-    LogService.log('Preloading news page $pageToPreload', category: 'news');
+    LogService.log('Preloading news page $pageToPreload ${widget.categoryId != null ? 'for category ${widget.categoryId}' : ''}', category: 'news');
     
     try {
-      final articles = await NewsService.getNews(page: pageToPreload, perPage: _fullPageCount);
+      // Use correct service method based on categoryId
+      final articles = widget.categoryId == null
+          ? await NewsService.getNews(page: pageToPreload, perPage: _fullPageCount)
+          : await NewsService.getNewsByCategory(categoryId: widget.categoryId!, page: pageToPreload, perPage: _fullPageCount);
       
       if (!mounted) return; 
 
@@ -112,18 +119,20 @@ class _NewsPageState extends State<NewsPage> {
     }
   }
 
-  // Updated loading function using LoadState
+  // Updated loading function using LoadState and categoryId
   Future<void> _loadNews({bool isInitialLoad = false}) async {
     // Prevent concurrent loads/refreshes
     if (!mounted || 
         (_loadState != LoadState.idle && 
          _loadState != LoadState.initial &&
-         _loadState != LoadState.error)) return; 
+         _loadState != LoadState.error)) {
+      return;
+    }
     
     setState(() {
       _loadState = isInitialLoad ? LoadState.loadingInitial : LoadState.loadingMore;
     });
-    LogService.log('Loading news page $_currentPage (Initial: $isInitialLoad)', category: 'news');
+    LogService.log('Loading news page $_currentPage ${widget.categoryId != null ? 'for category ${widget.categoryId}' : ''} (Initial: $isInitialLoad)', category: 'news');
 
     try {
       List<NewsArticle> articles;
@@ -136,7 +145,10 @@ class _NewsPageState extends State<NewsPage> {
       } else {
         // Otherwise load from API
         LogService.log('Loading page $_currentPage directly from API', category: 'news');
-        articles = await NewsService.getNews(page: _currentPage, perPage: _fullPageCount);
+        // Use correct service method based on categoryId
+        articles = widget.categoryId == null
+            ? await NewsService.getNews(page: _currentPage, perPage: _fullPageCount)
+            : await NewsService.getNewsByCategory(categoryId: widget.categoryId!, page: _currentPage, perPage: _fullPageCount);
       }
       
       if (!mounted) return; 
@@ -177,7 +189,7 @@ class _NewsPageState extends State<NewsPage> {
   // Smarter refresh function
   Future<void> _refreshNews() async {
      if (!mounted || _loadState == LoadState.refreshing) return; // Prevent concurrent refreshes
-     LogService.log('Refreshing news...', category: 'news');
+     LogService.log('Refreshing news ${widget.categoryId != null ? 'for category ${widget.categoryId}' : ''}...', category: 'news');
      
     setState(() {
       _loadState = LoadState.refreshing;
@@ -185,8 +197,10 @@ class _NewsPageState extends State<NewsPage> {
     });
 
     try {
-      // Fetch the very first page
-      final List<NewsArticle> fetchedArticles = await NewsService.getNews(page: 1, perPage: _fullPageCount);
+      // Use correct service method based on categoryId
+      final List<NewsArticle> fetchedArticles = widget.categoryId == null
+          ? await NewsService.getNews(page: 1, perPage: _fullPageCount)
+          : await NewsService.getNewsByCategory(categoryId: widget.categoryId!, page: 1, perPage: _fullPageCount);
 
       if (!mounted) return;
 
@@ -212,7 +226,9 @@ class _NewsPageState extends State<NewsPage> {
 
       // Reset state after refresh logic
       setState(() {
-        _currentPage = 1; // Reset to page 1 logic (next page to load is 2)
+        // Reset currentPage to 2 because page 1 was just fetched for the refresh.
+        // The next page to actually load into the list via _loadNews will be 2.
+        _currentPage = 2; 
         _hasMoreArticles = true; // Assume there might be more after refresh
         _loadState = LoadState.idle; // Back to idle
       });
@@ -236,13 +252,17 @@ class _NewsPageState extends State<NewsPage> {
 
   @override
   Widget build(BuildContext context) {
+    // Determine the title for the AppBar
+    final appBarTitle = widget.title ?? 'Nieuws'; 
+
     return Scaffold(
+      // Use conditional AppBar based on isInContainer and provide dynamic title
       appBar: widget.isInContainer ? null : PreferredSize(
         preferredSize: const Size.fromHeight(40.0), // Smaller height
         child: AppBar(
-          title: const Text(
-            'Nieuws',
-            style: TextStyle(fontSize: 16.0), // Smaller text
+          title: Text(
+            appBarTitle, // Use dynamic title
+            style: const TextStyle(fontSize: 16.0), // Smaller text
           ),
           backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Colors.white,
@@ -263,6 +283,9 @@ class _NewsPageState extends State<NewsPage> {
   }
 
   Widget _buildErrorView() {
+    // Generic error message
+    const String errorMessage = 'Oeps, het laden van het nieuws is niet gelukt.\nProbeer het over een paar minuten opnieuw.\nBlijft dit gebeuren? Laat het ons weten via een bugrapport in de instellingen..';
+
     return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
@@ -270,7 +293,7 @@ class _NewsPageState extends State<NewsPage> {
           Icon(Icons.error_outline, size: NewsStyles.errorIconSize, color: NewsStyles.errorIconColor),
           NewsStyles.largeSpaceVertical,
           const Text(
-            'Oeps, het laden van het nieuws is niet gelukt.\nProbeer het over een paar minuten opnieuw.\nBlijft dit gebeuren? Laat het ons weten via een bugrapport in de instellingen..',
+            errorMessage, // Use generic message
             textAlign: TextAlign.center,
           ),
           NewsStyles.extraLargeSpaceVertical,
@@ -287,14 +310,19 @@ class _NewsPageState extends State<NewsPage> {
   Widget _buildNewsLayout() {
     // Show empty state message if idle and list is empty (after trying to load)
     if (_articles.isEmpty && (_loadState == LoadState.idle || _loadState == LoadState.allLoaded)) {
+      // Dynamic empty message
+      final String emptyMessage = widget.categoryId != null 
+          ? 'Geen artikelen gevonden in ${widget.title ?? 'deze categorie'}.\nProbeer het later nog eens.'
+          : 'Geen nieuwsartikelen gevonden.\nProbeer het later nog eens.';
+
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(Icons.article_outlined, size: NewsStyles.infoIconSize, color: NewsStyles.infoIconColor),
             NewsStyles.largeSpaceVertical,
-            const Text(
-              'Geen nieuwsartikelen gevonden.\nProbeer het later nog eens.',
+            Text(
+              emptyMessage, // Use dynamic message
               textAlign: TextAlign.center,
             ),
           ],
@@ -307,7 +335,8 @@ class _NewsPageState extends State<NewsPage> {
       padding: EdgeInsets.zero, // Remove default ListView padding
       children: [
         // Featured article - no padding, full width
-        _buildFeaturedArticle(_articles.first),
+        // Ensure _articles is not empty before accessing first
+        if (_articles.isNotEmpty) _buildFeaturedArticle(_articles.first), 
         NewsStyles.largeSpaceVertical,
         if (_articles.length > 1)
           Padding(
@@ -315,10 +344,15 @@ class _NewsPageState extends State<NewsPage> {
             child: ListView.separated(
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
-              itemCount: _articles.length - 1,
+              // Adjust itemCount for the case where there's only one article
+              itemCount: _articles.length > 1 ? _articles.length - 1 : 0, 
               separatorBuilder: (context, index) => const Divider(height: 16),
               itemBuilder: (context, index) {
-                return _buildHorizontalArticleItem(_articles[index + 1]);
+                // Check index bounds just in case, though itemCount should handle it
+                if (index + 1 < _articles.length) {
+                  return _buildHorizontalArticleItem(_articles[index + 1]);
+                }
+                return const SizedBox.shrink(); // Should not happen
               },
             ),
           ),

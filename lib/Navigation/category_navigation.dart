@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
+import '../Pages/News/news_page.dart'; // Import NewsPage instead of CategoryNewsPage
 import '../services/log_service.dart';
-import '../Pages/Category/category_news_page.dart';
-import '../Pages/News/news_page.dart';
 
 class CategoryInfo {
   final String name;
@@ -111,10 +110,11 @@ class _NewsContainerState extends State<NewsContainer> {
     
     // Otherwise, show the category-specific page
     final category = _categories[_selectedCategoryIndex];
-    return CategoryNewsPage(
-      key: ValueKey('category-${category.id}'),  // Add a unique key for each category
-      title: category.name,
+    return NewsPage(
+      key: ValueKey('news_category_${category.id}'), // Add key for state preservation
       categoryId: category.id,
+      title: category.name, // Pass title for potential use (though AppBar is handled here)
+      isInContainer: true,
     );
   }
 }

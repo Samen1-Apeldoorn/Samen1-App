@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'Navigation/category_navigation.dart'; // Update the import
+import 'Navigation/category_navigation.dart'; // This now imports NewsPage indirectly
 import 'Pages/Radio/radio_page.dart';
 import 'Pages/TV/tv_page.dart';
 import 'Pages/Settings/settings_page.dart';

@@ -47,11 +47,6 @@ class NewsArticleScreen extends StatelessWidget {
                       height: NewsStyles.articleImageHeight,
                       fit: BoxFit.cover,  // Zorg ervoor dat de afbeelding de ruimte vult
                       alignment: Alignment.center,  // Centreer de afbeelding in de beschikbare ruimte
-                      placeholder: (context, url) => Container(
-                        height: NewsStyles.articleImageHeight,
-                        color: NewsStyles.placeholderColor,  // Vervang de afbeelding door een placeholder
-                        child: const Center(child: CircularProgressIndicator()),
-                      ),
                       errorWidget: (context, url, error) => Container(
                         height: NewsStyles.articleImageHeight,
                         color: NewsStyles.placeholderColor,

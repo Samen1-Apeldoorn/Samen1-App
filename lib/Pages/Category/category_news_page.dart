@@ -123,7 +123,9 @@ class _CategoryNewsPageState extends State<CategoryNewsPage> {
     if (!mounted || _isDisposed ||
         (_loadState != LoadState.idle && 
          _loadState != LoadState.initial &&
-         _loadState != LoadState.error)) return;
+         _loadState != LoadState.error)) {
+      return;
+    }
     
     setState(() {
        _loadState = isInitialLoad ? LoadState.loadingInitial : LoadState.loadingMore;
