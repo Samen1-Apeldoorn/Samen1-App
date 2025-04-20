@@ -20,7 +20,7 @@ class NewsArticle {
   static const Map<int, String> predefinedNames = {
     4: "Serge Poppelaars",
     20: "Donya Tijdink",
-    7: "Christiaan Geitenbeek",
+    7: "Christiaan Gijtenbeek",
     8: "Floris van den Broek",
     25: "Vera Kaal",
 
