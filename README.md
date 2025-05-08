@@ -53,23 +53,6 @@ We verwelkomen bijdragen van de community! Zo kun je meedoen:
 4. Push naar de branch (`git push origin feature/AmazingFeature`)
 5. Open een Pull Request
 
-## 📝 Code van gedrag
-
-Samen1 streeft naar een inclusieve en respectvolle gemeenschap. We verwachten dat alle bijdragers:
-- Respectvol communiceren
-- Constructieve feedback geven
-- Focus houden op wat het beste is voor de community
-
-## 📄 Licentie
-
-Dit project is gelicentieerd onder de MIT-licentie - zie het [LICENSE](LICENSE) bestand voor details.
-
-## 📞 Contact
-
-Floris van den Broek - [floris.vandenbroek@samen1.nl](mailto:floris.vandenbroek@samen1.nl)
-
-Project Link: [https://github.com/yourusername/samen1appv5](https://github.com/yourusername/samen1appv5)
-
 ---
 
 Ontwikkeld met ❤️ door het Samen1 Team
