@@ -28,7 +28,7 @@ dependencies:
   path_provider: ^2.1.1
   flutter_launcher_icons: ^0.14.3
   device_info_plus: ^11.3.3
-  html: ^0.15.5+1
+  html: ^0.15.6
   cached_network_image: ^3.3.0
   intl: ^0.20.0
   flutter_html: ^3.0.0
