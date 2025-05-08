@@ -1,0 +1,9 @@
+# This is part of the preview program of dependabot for dart
+version: 2
+
+enable-beta-ecosystems: true
+updates:
+  - package-ecosystem: "pub"
+    directory: "/"
+    schedule:
+      interval: "daily"
