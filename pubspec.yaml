@@ -22,7 +22,7 @@ dependencies:
       ref: main
   flutter_local_notifications: ^19.1.0
   shared_preferences: ^2.5.3
-  http: ^1.1.2
+  http: ^1.4.0
   url_launcher: ^6.1.14
   video_player: ^2.9.5
   path_provider: ^2.1.1
