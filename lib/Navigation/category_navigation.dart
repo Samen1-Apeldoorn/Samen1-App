@@ -30,6 +30,7 @@ class _NewsContainerState extends State<NewsContainer> {
   ];
 
   int _selectedCategoryIndex = 0;
+  final PageController _pageController = PageController();
 
   @override
   void initState() {
@@ -37,14 +38,18 @@ class _NewsContainerState extends State<NewsContainer> {
     LogService.log('NewsContainer: Initializing with category selector', category: 'navigation');
   }
 
+  @override
+  void dispose() {
+    _pageController.dispose();
+    super.dispose();
+  }
+
   void _onCategorySelected(int index) {
     LogService.log(
       'NewsContainer: Category changed from ${_categories[_selectedCategoryIndex].name} to ${_categories[index].name}', 
       category: 'navigation'
     );
-    setState(() {
-      _selectedCategoryIndex = index;
-    });
+    _pageController.animateToPage(index, duration: const Duration(milliseconds: 300), curve: Curves.ease);
   }
 
   @override
@@ -99,25 +104,32 @@ class _NewsContainerState extends State<NewsContainer> {
           ),
         ),
       ),
-      body: _buildCurrentCategoryPage(),
-    );
-  }
-
-  Widget _buildCurrentCategoryPage() {
-    // If we're on the main news page (index 0), show the regular NewsPage
-    if (_selectedCategoryIndex == 0) {
-      // Added const to ValueKey
-      return const NewsPage(key: ValueKey('news-all'), isInContainer: true); 
-    }
-    
-    // Otherwise, show the category-specific page
-    final category = _categories[_selectedCategoryIndex];
-    return NewsPage(
-      // ValueKey cannot be const here as category.id is dynamic
-      key: ValueKey('news_category_${category.id}'), 
-      categoryId: category.id,
-      title: category.name, // Pass title for potential use (though AppBar is handled here)
-      isInContainer: true,
+      body: PageView.builder(
+        controller: _pageController,
+        itemCount: _categories.length,
+        onPageChanged: (index) {
+          setState(() {
+            _selectedCategoryIndex = index;
+          });
+        },
+        itemBuilder: (context, index) {
+          // If we're on the main news page (index 0), show the regular NewsPage
+          if (index == 0) {
+            // Added const to ValueKey
+            return const NewsPage(key: ValueKey('news-all'), isInContainer: true); 
+          }
+          
+          // Otherwise, show the category-specific page
+          final category = _categories[index];
+          return NewsPage(
+            // ValueKey cannot be const here as category.id is dynamic
+            key: ValueKey('news_category_${category.id}'), 
+            categoryId: category.id,
+            title: category.name, // Pass title for potential use (though AppBar is handled here)
+            isInContainer: true,
+          );
+        },
+      ),
     );
   }
 }

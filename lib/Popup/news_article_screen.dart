@@ -249,9 +249,22 @@ class NewsArticleScreen extends StatelessWidget {
           margin: Margins.symmetric(vertical: 16),
           alignment: Alignment.center,
         ),
+        "div.youtube-container-custom": Style(
+          backgroundColor: const Color(0xFFb03333),
+          margin: Margins.symmetric(vertical: 16),
+          textAlign: TextAlign.center,
+          padding: HtmlPaddings.all(8),
+        ),
+        "div.youtube-container-custom a": Style(
+          color: Colors.white,
+          display: Display.block,
+          padding: HtmlPaddings.all(12),
+          textDecoration: TextDecoration.none,
+          fontWeight: FontWeight.bold,
+        ),
       },
       onLinkTap: (String? url, _, __) async {
-        if (url != null && url.contains('youtu')) {
+        if (url != null) {
           await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
         }
       },
@@ -268,25 +281,13 @@ class NewsArticleScreen extends StatelessWidget {
       if (videoId == null) return match.group(0) ?? '';
       
       final youtubeUrl = 'https://youtu.be/$videoId';
-      return '''
-        <div style="
-          background-color: #b03333;
-          border-radius: 25px;
-          margin: 16px 0;
-          text-align: center;
-          padding: 8px;
-        ">
-          <a href="$youtubeUrl" style="
-            color: white;
-            display: block;
-            padding: 12px;
-            text-decoration: none;
-            font-weight: bold;
-          ">
+      return """
+        <div class="youtube-container-custom">
+          <a href="$youtubeUrl">
             Bekijk de video op YouTube
           </a>
         </div>
-      ''';
+      """;
     });
   }
 }
