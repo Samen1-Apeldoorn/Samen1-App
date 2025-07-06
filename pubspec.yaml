@@ -20,6 +20,7 @@ dependencies:
       url: https://github.com/fluttercommunity/flutter_workmanager.git
       path: workmanager
       ref: main
+    version: 0.8.0
   flutter_local_notifications: ^19.1.0
   shared_preferences: ^2.5.3
   http: ^1.4.0
