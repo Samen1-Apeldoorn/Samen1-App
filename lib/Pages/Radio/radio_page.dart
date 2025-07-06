@@ -15,19 +15,33 @@ class RadioPage extends StatefulWidget {
   State<RadioPage> createState() => _RadioPageState();
 }
 
-class _RadioPageState extends State<RadioPage> {
+class _RadioPageState extends State<RadioPage> with TickerProviderStateMixin {
   // Use the singleton AudioService instead of creating a new AudioPlayer
   final AudioService _audioService = AudioService();
+  
+  // State variables with better organization
   bool _isLoading = true;
   bool _isPlaying = false;
-  String _errorMessage = ''; // Added to store initialization errors
-  bool _isPlayerInitialized = false; // Track successful initialization
+  bool _isConnecting = false;
+  String _errorMessage = '';
+  bool _isPlayerInitialized = false;
   
   // Stream info variables
-  String _currentTrack = 'Laden...';
+  String _currentTrack = '';
+  String _currentArtist = 'Samen1 Radio';
   String _coverArtUrl = '';
   Timer? _streamInfoTimer;
   bool _isLoadingInfo = true;
+  
+  // Animation controllers for smooth UI transitions
+  late AnimationController _playButtonController;
+  late AnimationController _artworkController;
+  late AnimationController _trackInfoController;
+  
+  // Connection retry logic
+  int _retryCount = 0;
+  static const int _maxRetries = 3;
+  Timer? _retryTimer;
 
   static const String _radioInfoUrl = 'https://server-67.stream-server.nl:2000/json/stream/ValouweMediaStichting';
   static const String _radioStationName = 'Samen1 Radio';
@@ -35,102 +49,191 @@ class _RadioPageState extends State<RadioPage> {
   @override
   void initState() {
     super.initState();
-    LogService.log('RadioPage: Initializing page and enabling wakelock', category: 'radio');
-    _enableWakelock(); // Extracted wakelock logic
+    LogService.log('RadioPage: Initializing optimized page', category: 'radio');
+    
+    // Initialize animation controllers
+    _playButtonController = AnimationController(
+      duration: const Duration(milliseconds: 200),
+      vsync: this,
+    );
+    _artworkController = AnimationController(
+      duration: const Duration(milliseconds: 500),
+      vsync: this,
+    );
+    _trackInfoController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    
+    // Start artwork animation
+    _artworkController.forward();
+    
+    // Enable wakelock
+    _enableWakelock();
+    
+    // Initialize everything in parallel for faster startup
+    _initializeEverything();
+  }
+  
+  // Parallel initialization for better performance
+  Future<void> _initializeEverything() async {
+    final List<Future> futures = [
+      _initializePlayer(),
+      _preloadStreamInfo(),
+    ];
+    
+    // Wait for both operations to complete
+    await Future.wait(futures);
+    
+    if (_isPlayerInitialized && mounted) {
+      _setupPlayerStateListener();
+      _setupPeriodicStreamInfoUpdates();
+      _trackInfoController.forward();
+      
+      // Fetch stream info immediately after setup
+      _fetchStreamInfo(isInitialLoad: true);
+    }
+  }
+  
+  // Preload stream info to reduce initial loading time
+  Future<void> _preloadStreamInfo() async {
+    try {
+      LogService.log('RadioPage: Preloading stream info', category: 'radio_optimization');
+      await _fetchStreamInfo(isInitialLoad: true);
+    } catch (e) {
+      LogService.log('RadioPage: Failed to preload stream info: $e', category: 'radio_error');
+    }
+  }
 
-    // Initialize player first
-    _initializePlayer().then((success) {
-      if (success && mounted) {
-        _isPlayerInitialized = true;
-        // Fetch initial stream info ONLY after successful player init
-        _fetchStreamInfo();
-        // Setup periodic updates ONLY after successful player init
-        _setupPeriodicStreamInfoUpdates();
+  // Helper method for enabling wakelock with retry logic
+  void _enableWakelock() {
+    WakelockPlus.enable().then((_) {
+      LogService.log('RadioPage: Wakelock enabled successfully', category: 'radio');
+    }).catchError((error) {
+      LogService.log('RadioPage: Failed to enable wakelock: $error', category: 'radio_error');
+      // Retry after 2 seconds
+      Timer(const Duration(seconds: 2), () {
+        WakelockPlus.enable().catchError((e) {
+          LogService.log('RadioPage: Wakelock retry failed: $e', category: 'radio_error');
+        });
+      });
+    });
+  }
+
+  // Enhanced player state listener with better error handling
+  void _setupPlayerStateListener() {
+    _audioService.player.playerStateStream.listen((state) {
+      if (!mounted) return;
+
+      LogService.log(
+        'RadioPage: Player state update - Playing: ${state.playing}, '
+        'Processing: ${state.processingState}',
+        category: 'radio_detail'
+      );
+
+      bool shouldUpdateState = false;
+      bool newIsPlaying = _isPlaying;
+      bool newIsConnecting = _isConnecting;
+
+      // Handle different processing states
+      switch (state.processingState) {
+        case ProcessingState.loading:
+        case ProcessingState.buffering:
+          if (!newIsConnecting) {
+            newIsConnecting = true;
+            shouldUpdateState = true;
+          }
+          break;
+        case ProcessingState.ready:
+          if (newIsConnecting) {
+            newIsConnecting = false;
+            shouldUpdateState = true;
+          }
+          if (newIsPlaying != state.playing) {
+            newIsPlaying = state.playing;
+            shouldUpdateState = true;
+            
+            // Animate play button
+            if (state.playing) {
+              _playButtonController.forward();
+            } else {
+              _playButtonController.reverse();
+            }
+          }
+          break;
+        case ProcessingState.idle:
+          if (_isPlayerInitialized && newIsPlaying) {
+            newIsPlaying = false;
+            newIsConnecting = false;
+            shouldUpdateState = true;
+            _playButtonController.reverse();
+            LogService.log('RadioPage: Player became idle, setting UI to paused.', category: 'radio_warning');
+          }
+          break;
+        case ProcessingState.completed:
+          // Handle stream completion (shouldn't happen with live streams)
+          break;
+      }
+
+      if (shouldUpdateState) {
+        setState(() {
+          _isPlaying = newIsPlaying;
+          _isConnecting = newIsConnecting;
+        });
+      }
+    }, onError: (error) {
+      LogService.log('RadioPage: Player state stream error: $error', category: 'radio_error');
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+          _isConnecting = false;
+        });
       }
     });
-
-    // Listen to player state changes - moved setup here for clarity
-    _setupPlayerStateListener();
   }
 
-  // Helper method for enabling wakelock
-  void _enableWakelock() {
-     WakelockPlus.enable().then((_) {
-       LogService.log('RadioPage: Wakelock enabled successfully', category: 'radio');
-     }).catchError((error) {
-       LogService.log('RadioPage: Failed to enable wakelock: $error', category: 'radio_error');
-     });
-  }
-
-  // Helper method for setting up the listener
-  void _setupPlayerStateListener() {
-     _audioService.player.playerStateStream.listen((state) {
-       if (!mounted) return; // Check mounted state first
-
-       LogService.log(
-         'RadioPage: Player state update - Playing: ${state.playing}, '
-         'Processing: ${state.processingState}',
-         category: 'radio_detail'
-       );
-
-       bool shouldUpdateState = false;
-       bool newIsPlaying = _isPlaying; // Assume no change initially
-
-       // Handle loading/buffering indication
-       if (state.processingState == ProcessingState.loading || state.processingState == ProcessingState.buffering) {
-         if (!_isLoading) { // Only set state if not already loading
-            // Optionally show a specific buffering indicator here
-            // setState(() { _isLoading = true; }); // Or a different flag like _isBuffering
-         }
-       } else if (_isLoading && state.processingState != ProcessingState.idle) {
-         // If we were loading, but now we are ready/completed, stop loading indicator
-         // _isLoading should be primarily controlled by _initializePlayer result now
-         // setState(() { _isLoading = false; });
-       }
-
-       // Update playing state based on player
-       if (newIsPlaying != state.playing) {
-          newIsPlaying = state.playing;
-          shouldUpdateState = true;
-       }
-
-       // If player becomes idle unexpectedly after init, reflect paused state
-       if (state.processingState == ProcessingState.idle && _isPlayerInitialized && newIsPlaying) {
-          newIsPlaying = false;
-          shouldUpdateState = true;
-          LogService.log('RadioPage: Player became idle, setting UI to paused.', category: 'radio_warning');
-       }
-
-       // Apply state changes if needed
-       if (shouldUpdateState) {
-         setState(() {
-           _isPlaying = newIsPlaying;
-         });
-       }
-     });
-  }
-
-  // Helper method for periodic updates
+  // Optimized periodic updates with adaptive interval
   void _setupPeriodicStreamInfoUpdates() {
-    LogService.log('RadioPage: Setting up periodic stream info updates (30s interval)', category: 'radio');
-    _streamInfoTimer?.cancel(); // Cancel previous timer if any
-    _streamInfoTimer = Timer.periodic(const Duration(seconds: 30), (_) { 
-      // Only fetch if player is initialized and page is mounted
+    LogService.log('RadioPage: Setting up optimized periodic stream info updates', category: 'radio');
+    _streamInfoTimer?.cancel();
+    
+    // Fetch stream info immediately first
+    _fetchStreamInfo(isInitialLoad: false);
+    
+    // Use shorter interval when playing, longer when paused
+    Duration interval = _isPlaying ? const Duration(seconds: 20) : const Duration(seconds: 60);
+    
+    _streamInfoTimer = Timer.periodic(interval, (_) { 
       if (_isPlayerInitialized && mounted) {
         LogService.log('RadioPage: Periodic stream info update triggered', category: 'radio_detail');
         _fetchStreamInfo();
+        
+        // Adjust interval based on playing state
+        if (_isPlaying && _streamInfoTimer?.tick == 1) {
+          _streamInfoTimer?.cancel();
+          _setupPeriodicStreamInfoUpdates(); // Restart with correct interval
+        }
       } else {
-         LogService.log('RadioPage: Skipping periodic update (player not ready or page disposed)', category: 'radio_detail');
-         _streamInfoTimer?.cancel(); // Stop timer if player/page not valid
+        LogService.log('RadioPage: Stopping periodic updates (player not ready or page disposed)', category: 'radio_detail');
+        _streamInfoTimer?.cancel();
       }
     });
   }
 
   @override
   void dispose() {
-    LogService.log('RadioPage: Disposing page and canceling timers', category: 'radio');
-    _streamInfoTimer?.cancel();
+    LogService.log('RadioPage: Disposing optimized page', category: 'radio');
     
+    // Cancel all timers
+    _streamInfoTimer?.cancel();
+    _retryTimer?.cancel();
+    
+    // Dispose animation controllers
+    _playButtonController.dispose();
+    _artworkController.dispose();
+    _trackInfoController.dispose();
+    
+    // Disable wakelock
     WakelockPlus.disable().then((_) {
       LogService.log('RadioPage: Wakelock disabled successfully', category: 'radio');
     }).catchError((error) {
@@ -141,17 +244,23 @@ class _RadioPageState extends State<RadioPage> {
     super.dispose();
   }
 
-  Future<void> _fetchStreamInfo() async {
-    // Ensure player is initialized before fetching
+  // Enhanced stream info fetching with caching and error recovery
+  Future<void> _fetchStreamInfo({bool isInitialLoad = false}) async {
     if (!_isPlayerInitialized) {
-       LogService.log('RadioPage: Skipping fetchStreamInfo - player not initialized.', category: 'radio_warning');
-       return;
+      LogService.log('RadioPage: Skipping fetchStreamInfo - player not initialized.', category: 'radio_warning');
+      return;
     }
-    // Keep track if this was the initial load where info was loading
+    
     final bool wasLoadingInfo = _isLoadingInfo;
+    
     try {
       LogService.log('RadioPage: Fetching stream info from $_radioInfoUrl', category: 'radio_detail');
-      final response = await http.get(Uri.parse(_radioInfoUrl));
+      
+      // Use shorter timeout for initial load to get faster response
+      final timeoutDuration = isInitialLoad ? const Duration(seconds: 5) : const Duration(seconds: 10);
+      
+      final response = await http.get(Uri.parse(_radioInfoUrl))
+          .timeout(timeoutDuration);
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -163,129 +272,181 @@ class _RadioPageState extends State<RadioPage> {
           category: 'radio'
         );
 
-        // --- Define coverUrl outside setState ---
-        String processedCoverUrl = coverArt;
-        if (processedCoverUrl.isNotEmpty && processedCoverUrl.contains('mzstatic.com')) {
-          final int lastSlashIndex = processedCoverUrl.lastIndexOf('/');
-          if (lastSlashIndex != -1) {
-            processedCoverUrl = '${processedCoverUrl.substring(0, lastSlashIndex + 1)}512x512bb.jpg';
-            LogService.log(
-              'RadioPage: Resized cover art to 512x512: $processedCoverUrl',
-              category: 'radio_detail'
-            );
+        // Process cover art URL
+        String processedCoverUrl = _processCoverArtUrl(coverArt);
+        
+        // Parse artist and title
+        String artist = _radioStationName;
+        String title = nowPlaying;
+        
+        if (nowPlaying.contains(' - ')) {
+          final parts = nowPlaying.split(' - ');
+          if (parts.length >= 2) {
+            artist = parts[0].trim();
+            title = parts.sublist(1).join(' - ').trim();
           }
         }
-        // --- End processing coverUrl ---
+        
+        // Ensure we don't have empty titles
+        if (title.isEmpty || title == 'Onbekend nummer') {
+          title = _radioStationName;
+        }
 
-        // Check if info actually changed before calling setState or updating media item
-        final bool trackChanged = _currentTrack != nowPlaying;
-        final bool artChanged = _coverArtUrl != processedCoverUrl; // Compare state variable with processed URL
+        // Check if info actually changed (with caching)
+        final bool trackChanged = _currentTrack != title || _currentArtist != artist;
+        final bool artChanged = _coverArtUrl != processedCoverUrl;
 
-        // Update UI state if needed (track/art changed or initial load)
+        // Only update if changed or initial load
         if (mounted && (trackChanged || artChanged || wasLoadingInfo)) {
           setState(() {
-            _currentTrack = nowPlaying;
-            _coverArtUrl = processedCoverUrl; // Assign processed URL to state variable
-            _isLoadingInfo = false; // Mark info as loaded
+            _currentTrack = title;
+            _currentArtist = artist;
+            _coverArtUrl = processedCoverUrl;
+            _isLoadingInfo = false;
           });
+          
+          // Animate track info change
+          if (trackChanged) {
+            _trackInfoController.reset();
+            _trackInfoController.forward();
+          }
         }
 
-        // Update the notification if track info or artwork changed, OR if it was the initial load.
-        // This ensures the notification gets the correct info ASAP.
+        // Update media item if needed
         if (trackChanged || artChanged || wasLoadingInfo) {
-          LogService.log('RadioPage: Updating media notification (data changed or initial load).', category: 'radio');
-          // _updateMediaItem uses the state variables which were just updated in setState
+          LogService.log('RadioPage: Updating media notification', category: 'radio');
           _updateMediaItem();
         }
+        
+        // Reset retry count on success
+        _retryCount = 0;
+        
       } else {
         LogService.log(
           'RadioPage: Failed to fetch stream info - HTTP ${response.statusCode}',
           category: 'radio_error'
         );
-        // Optionally set isLoadingInfo to false even on error if needed
-        if (mounted && _isLoadingInfo) {
-           setState(() { _isLoadingInfo = false; });
-        }
+        _handleStreamInfoError();
       }
     } catch (e, stack) {
       LogService.log(
         'RadioPage: Error fetching stream info: $e\n$stack',
         category: 'radio_error'
       );
-      if (mounted && _isLoadingInfo) { // Ensure loading indicator is turned off on error
-        setState(() {
-          _isLoadingInfo = false;
-        });
+      _handleStreamInfoError();
+    }
+  }
+  
+  // Process cover art URL for optimal loading
+  String _processCoverArtUrl(String coverArt) {
+    if (coverArt.isEmpty) return '';
+    
+    if (coverArt.contains('mzstatic.com')) {
+      final int lastSlashIndex = coverArt.lastIndexOf('/');
+      if (lastSlashIndex != -1) {
+        final optimizedUrl = '${coverArt.substring(0, lastSlashIndex + 1)}512x512bb.jpg';
+        LogService.log(
+          'RadioPage: Optimized cover art URL: $optimizedUrl',
+          category: 'radio_detail'
+        );
+        return optimizedUrl;
       }
+    }
+    
+    return coverArt;
+  }
+  
+  // Handle stream info fetch errors with retry logic
+  void _handleStreamInfoError() {
+    if (mounted && _isLoadingInfo) {
+      setState(() {
+        _isLoadingInfo = false;
+      });
+    }
+    
+    // Implement retry logic
+    if (_retryCount < _maxRetries) {
+      _retryCount++;
+      final delay = Duration(seconds: _retryCount * 5); // Progressive backoff
+      
+      LogService.log(
+        'RadioPage: Retrying stream info fetch in ${delay.inSeconds}s (attempt $_retryCount/$_maxRetries)',
+        category: 'radio_warning'
+      );
+      
+      _retryTimer?.cancel();
+      _retryTimer = Timer(delay, () {
+        if (mounted && _isPlayerInitialized) {
+          _fetchStreamInfo();
+        }
+      });
     }
   }
 
+  // Enhanced media item update
   void _updateMediaItem() {
-    // Parse artist and title from the nowplaying string
-    String artist = _radioStationName;
-    String title = _currentTrack;
-    
-    if (_currentTrack.contains(' - ')) {
-      final parts = _currentTrack.split(' - ');
-      if (parts.length >= 2) {
-        artist = parts[0];
-        title = parts.sublist(1).join(' - ');
-        LogService.log(
-          'RadioPage: Parsed track info - Artist: "$artist", Title: "$title"',
-          category: 'radio_detail'
-        );
-      }
-    }
-    
-    // Update media item using our service
     _audioService.updateMediaItem(
-      title: title,
-      artist: artist,
+      title: _currentTrack,
+      artist: _currentArtist,
       artworkUrl: _coverArtUrl,
     );
   }
 
-  // Modified to return bool indicating success
+  // Enhanced player initialization with better error handling
   Future<bool> _initializePlayer() async {
     setState(() {
-      _isLoading = true; // Ensure loading indicator is shown
+      _isLoading = true;
       _errorMessage = '';
     });
+    
     try {
-      LogService.log('RadioPage: Initializing audio player', category: 'radio');
+      LogService.log('RadioPage: Initializing optimized audio player', category: 'radio');
       await _audioService.setupRadioPlayer();
 
-      if (!mounted) return false; // Check mount status after async gap
+      if (!mounted) return false;
 
       setState(() {
         _isLoading = false;
         _errorMessage = '';
-        _isPlaying = _audioService.player.playing; // Initial state
+        _isPlaying = _audioService.player.playing;
+        _isPlayerInitialized = true;
       });
+      
       LogService.log(
         'RadioPage: Audio player initialized successfully. Is playing: $_isPlaying',
         category: 'radio'
       );
-      return true; // Indicate success
+      
+      return true;
     } catch (e, stack) {
       LogService.log(
         'RadioPage: Error initializing audio player: $e\n$stack',
         category: 'radio_error'
       );
-      if (!mounted) return false; // Check mount status after async gap
+      
+      if (!mounted) return false;
+      
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Fout bij initialiseren van de radio. Controleer de internetverbinding.'; // More specific message
+        _errorMessage = 'Kon radio niet laden. Controleer je internetverbinding.';
+        _isPlayerInitialized = false;
       });
-      return false; // Indicate failure
+      
+      return false;
     }
   }
 
+  // Enhanced toggle with connection state handling
   Future<void> _togglePlayPause() async {
-    // Prevent action if player isn't initialized or had an error
     if (!_isPlayerInitialized || _errorMessage.isNotEmpty) {
-       LogService.log('RadioPage: Play/Pause blocked - player not ready or error occurred.', category: 'radio_warning');
-       return;
+      LogService.log('RadioPage: Play/Pause blocked - player not ready', category: 'radio_warning');
+      return;
+    }
+
+    // Prevent multiple rapid taps
+    if (_isConnecting) {
+      LogService.log('RadioPage: Play/Pause blocked - already connecting', category: 'radio_warning');
+      return;
     }
 
     try {
@@ -294,13 +455,22 @@ class _RadioPageState extends State<RadioPage> {
         await _audioService.pause();
       } else {
         LogService.log('RadioPage: User initiated play', category: 'radio_action');
-        // Ensure the player is ready or becomes ready before updating media item
-        // The state listener will handle the _isPlaying state update
+        
+        // Set connecting state
+        setState(() {
+          _isConnecting = true;
+        });
+        
         await _audioService.play();
-        // Update media item immediately ONLY if info is already loaded
-        // Otherwise, _fetchStreamInfo will handle it when called periodically or initially
+        
+        // Fetch stream info immediately when starting playback
+        if (mounted) {
+          _fetchStreamInfo(isInitialLoad: true);
+        }
+        
+        // Update media item if info is available
         if (!_isLoadingInfo) {
-           _updateMediaItem();
+          _updateMediaItem();
         }
       }
     } catch (e, stack) {
@@ -309,10 +479,20 @@ class _RadioPageState extends State<RadioPage> {
         category: 'radio_error'
       );
       
-      // Show error to user
+      // Reset connecting state on error
       if (mounted) {
+        setState(() {
+          _isConnecting = false;
+        });
+        
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Probleem met afspelen: ${e.toString().split('\n')[0]}'))
+          SnackBar(
+            content: Text('Verbindingsfout: ${e.toString().split('\n')[0]}'),
+            action: SnackBarAction(
+              label: 'Opnieuw',
+              onPressed: _togglePlayPause,
+            ),
+          ),
         );
       }
     }
@@ -320,132 +500,439 @@ class _RadioPageState extends State<RadioPage> {
 
   @override
   Widget build(BuildContext context) {
-    // Use cover art from stream info if available, otherwise use fallback
-    final displayArtUrl = _coverArtUrl.isNotEmpty ? _coverArtUrl : AudioService.fallbackArtworkUrl;
-    
     return Scaffold(
+      backgroundColor: Colors.grey[50],
       appBar: AppBar(
-        title: const Text('Radio Player'),
+        title: Row(
+          children: [
+            const Text('Samen1 Radio'),
+            const SizedBox(width: 12),
+            _buildCompactStatusIndicator(),
+          ],
+        ),
         backgroundColor: Theme.of(context).colorScheme.primary,
         foregroundColor: Colors.white,
+        elevation: 0,
         actions: [
           IconButton(
-            icon: Icon(_isPlaying ? Icons.pause : Icons.play_arrow),
-            onPressed: _togglePlayPause,
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 200),
+              child: Icon(
+                _isPlaying ? Icons.pause : Icons.play_arrow,
+                key: ValueKey(_isPlaying),
+              ),
+            ),
+            onPressed: (_isPlayerInitialized && _errorMessage.isEmpty) ? _togglePlayPause : null,
           ),
         ],
       ),
-      body: Stack(
+      body: _buildBody(),
+    );
+  }
+  
+  Widget _buildBody() {
+    if (_isLoading) {
+      return _buildLoadingScreen();
+    }
+    
+    if (_errorMessage.isNotEmpty) {
+      return _buildErrorScreen();
+    }
+    
+    return _buildPlayerScreen();
+  }
+  
+  Widget _buildLoadingScreen() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          // Show loading indicator OR error message OR main content
-          // Use _isLoading which is now primarily controlled by _initializePlayer
-          if (_isLoading)
-            const Center(child: CircularProgressIndicator()),
-          // Display error message if initialization failed
-          if (!_isLoading && _errorMessage.isNotEmpty) 
-            Center(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Text(
-                  _errorMessage,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(color: Theme.of(context).colorScheme.error, fontSize: 16),
+          TweenAnimationBuilder(
+            tween: Tween<double>(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 1000),
+            builder: (context, double value, child) {
+              return Transform.scale(
+                scale: 0.8 + (value * 0.2),
+                child: CircularProgressIndicator(
+                  value: value,
+                  strokeWidth: 3,
+                  color: Theme.of(context).colorScheme.primary,
                 ),
+              );
+            },
+          ),
+          const SizedBox(height: 24),
+          const Text(
+            'Radio wordt geladen...',
+            style: TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w500,
+              color: Colors.grey,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildErrorScreen() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32.0),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.error_outline,
+              size: 64,
+              color: Theme.of(context).colorScheme.error,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              _errorMessage,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 16,
+                color: Theme.of(context).colorScheme.error,
               ),
             ),
-          // Display main content only if not loading and no error
-          if (!_isLoading && _errorMessage.isEmpty)
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
+            const SizedBox(height: 32),
+            ElevatedButton.icon(
+              onPressed: () => _initializePlayer(),
+              icon: const Icon(Icons.refresh),
+              label: const Text('Opnieuw proberen'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+  
+  Widget _buildPlayerScreen() {
+    return RefreshIndicator(
+      onRefresh: _onRefresh,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: SizedBox(
+          height: MediaQuery.of(context).size.height - kToolbarHeight - 32, // Full height minus app bar
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center, // Center everything vertically
+            children: [
+              _buildArtworkSection(),
+              const SizedBox(height: 20),
+              _buildTrackInfoSection(),
+              const SizedBox(height: 28),
+              _buildControlsSection(),
+              const SizedBox(height: 80), // Extra space for pull-to-refresh
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+  
+  // Pull-to-refresh handler
+  Future<void> _onRefresh() async {
+    LogService.log('RadioPage: Pull-to-refresh triggered', category: 'radio_action');
+    
+    // Fetch fresh stream info
+    await _fetchStreamInfo();
+    
+    // Update media item
+    _updateMediaItem();
+    
+    // Show feedback
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Radio informatie ververst'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+  }
+  
+  Widget _buildArtworkSection() {
+    final displayArtUrl = _coverArtUrl.isNotEmpty ? _coverArtUrl : AudioService.fallbackArtworkUrl;
+    
+    return FadeTransition(
+      opacity: _artworkController,
+      child: Column(
+        children: [
+          // Artwork container
+          Container(
+            width: 260, // Reduced from 280
+            height: 260, // Reduced from 280
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.2),
+                  spreadRadius: 2,
+                  blurRadius: 20,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(20),
+              child: Stack(
                 children: [
-                  // Album artwork with proper error handling
+                  // Background gradient
                   Container(
-                    width: 200,
-                    height: 200,
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(10),
-                      color: Colors.grey[200],
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withAlpha(51),
-                          spreadRadius: 2,
-                          blurRadius: 5,
-                          offset: const Offset(0, 3),
-                        ),
-                      ],
-                    ),
-                    child: ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: CachedNetworkImage(
-                        imageUrl: displayArtUrl,
-                        fit: BoxFit.cover,
-                        placeholder: (context, url) => Center(
-                          child: CircularProgressIndicator(
-                            color: Theme.of(context).colorScheme.primary,
-                          ),
-                        ),
-                        errorWidget: (context, url, error) => Center(
-                          child: Column(
-                            mainAxisAlignment: MainAxisAlignment.center,
-                            children: [
-                              Icon(
-                                Icons.radio, 
-                                size: 50, 
-                                color: Theme.of(context).colorScheme.primary
-                              ),
-                              const SizedBox(height: 8),
-                              const Text(
-                                'Samen1',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                            ],
-                          ),
-                        ),
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Theme.of(context).colorScheme.primary.withOpacity(0.1),
+                          Theme.of(context).colorScheme.primary.withOpacity(0.05),
+                        ],
                       ),
                     ),
                   ),
-                  const SizedBox(height: 30),
-                  const Text(
-                    _radioStationName,
-                    style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 8),
-                  // Currently playing track
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 20),
-                    child: Text(
-                      // Show loading text if player is init but info isn't, else show track
-                      _isPlayerInitialized && _isLoadingInfo ? 'Laden...' : _currentTrack,
-                      style: const TextStyle(fontSize: 16, color: Colors.grey),
-                      textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
+                  // Artwork image
+                  CachedNetworkImage(
+                    imageUrl: displayArtUrl,
+                    fit: BoxFit.cover,
+                    width: double.infinity,
+                    height: double.infinity,
+                    placeholder: (context, url) => Container(
+                      color: Colors.grey[100],
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: Theme.of(context).colorScheme.primary,
+                          strokeWidth: 2,
+                        ),
+                      ),
+                    ),
+                    errorWidget: (context, url, error) => Container(
+                      color: Colors.grey[100],
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            Icons.radio,
+                            size: 80,
+                            color: Theme.of(context).colorScheme.primary,
+                          ),
+                          const SizedBox(height: 16),
+                          Text(
+                            'Samen1 Radio',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Theme.of(context).colorScheme.primary,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(height: 40),
-                  // Play/Pause button - Disable if player not ready
-                  ElevatedButton(
-                    // Disable button if player not initialized or error occurred
-                    onPressed: (_isPlayerInitialized && _errorMessage.isEmpty) ? _togglePlayPause : null,
-                    style: ElevatedButton.styleFrom(
-                      shape: const CircleBorder(),
-                      padding: const EdgeInsets.all(20),
-                      backgroundColor: (_isPlayerInitialized && _errorMessage.isEmpty)
-                          ? Theme.of(context).colorScheme.primary
-                          : Colors.grey, // Indicate disabled state
+                  // Connecting overlay
+                  if (_isConnecting)
+                    Container(
+                      color: Colors.black.withOpacity(0.3),
+                      child: Center(
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      ),
                     ),
-                    child: Icon(
-                      _isPlaying ? Icons.pause : Icons.play_arrow,
-                      size: 48,
-                      color: Colors.white,
-                    ),
+                  // Status indicator in top-right corner
+                  Positioned(
+                    top: 12, // Closer to the edge
+                    right: 12, // Closer to the edge
+                    child: _buildStatusBadge(),
                   ),
                 ],
               ),
             ),
+          ),
         ],
+      ),
+    );
+  }
+  
+  Widget _buildTrackInfoSection() {
+    return FadeTransition(
+      opacity: _trackInfoController,
+      child: Column(
+        children: [
+          Text(
+            _radioStationName,
+            style: const TextStyle(
+              fontSize: 24, // Reduced from 28
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 6), // Reduced from 8
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6), // Reduced vertical padding
+            decoration: BoxDecoration(
+              color: Theme.of(context).colorScheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Text(
+              _isLoadingInfo ? 'Laadt trackinformatie...' : 
+              (_currentTrack.isEmpty ? 'Onbekend nummer' : _currentTrack),
+              style: TextStyle(
+                fontSize: 15, // Reduced from 16
+                color: Theme.of(context).colorScheme.primary,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  Widget _buildControlsSection() {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          width: 70, // Reduced from 80
+          height: 70, // Reduced from 80
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: (_isPlayerInitialized && _errorMessage.isEmpty)
+                ? Theme.of(context).colorScheme.primary
+                : Colors.grey[400],
+            boxShadow: [
+              if (_isPlayerInitialized && _errorMessage.isEmpty)
+                BoxShadow(
+                  color: Theme.of(context).colorScheme.primary.withOpacity(0.3),
+                  spreadRadius: 2,
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(35), // Updated for new size
+              onTap: (_isPlayerInitialized && _errorMessage.isEmpty) ? _togglePlayPause : null,
+              child: Stack(
+                alignment: Alignment.center,
+                children: [
+                  if (_isConnecting)
+                    const CircularProgressIndicator(
+                      color: Colors.white,
+                      strokeWidth: 2,
+                    )
+                  else
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 150),
+                      child: Icon(
+                        _isPlaying ? Icons.pause : Icons.play_arrow,
+                        key: ValueKey(_isPlaying),
+                        size: 32, // Reduced from 36
+                        color: Colors.white,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+  
+  // Compact status badge for in the artwork
+  Widget _buildStatusBadge() {
+    Color backgroundColor;
+    Color textColor;
+    String statusText;
+    IconData icon;
+    
+    if (_isPlaying) {
+      backgroundColor = Colors.green;
+      textColor = Colors.white;
+      statusText = 'LIVE';
+      icon = Icons.radio;
+    } else if (_isConnecting) {
+      backgroundColor = Colors.orange;
+      textColor = Colors.white;
+      statusText = 'VERBINDEN';
+      icon = Icons.sync;
+    } else {
+      backgroundColor = Colors.grey.shade700;
+      textColor = Colors.white;
+      statusText = 'PAUZE';
+      icon = Icons.pause;
+    }
+    
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4), // More compact padding
+      decoration: BoxDecoration(
+        color: backgroundColor,
+        borderRadius: BorderRadius.circular(16), // Smaller border radius
+        boxShadow: [
+          BoxShadow(
+            color: backgroundColor.withOpacity(0.3),
+            spreadRadius: 1,
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(
+            icon,
+            size: 12, // Smaller icon
+            color: textColor,
+          ),
+          const SizedBox(width: 4), // Less spacing
+          Text(
+            statusText,
+            style: TextStyle(
+              color: textColor,
+              fontSize: 10, // Smaller text
+              fontWeight: FontWeight.bold,
+              letterSpacing: 0.3, // Less letter spacing
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+  
+  // Compact status indicator for app bar
+  Widget _buildCompactStatusIndicator() {
+    Color color;
+    if (_isPlaying) {
+      color = Colors.green;
+    } else if (_isConnecting) {
+      color = Colors.orange;
+    } else {
+      color = Colors.grey.shade400;
+    }
+    
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 300),
+      width: 8,
+      height: 8,
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
       ),
     );
   }

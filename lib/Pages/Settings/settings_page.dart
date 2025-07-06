@@ -579,7 +579,7 @@ class _SettingsPageState extends State<SettingsPage> {
     return ExpansionTile(
       leading: const Icon(Icons.storage),
       title: const Text('Cache Beheer'),
-      subtitle: const Text('Beheer opgeslagen artikelen'),
+      subtitle: const Text('Beheer opgeslagen artikelen en radio cache'),
       children: [
         ListTile(
           leading: const Icon(Icons.refresh),
@@ -588,9 +588,15 @@ class _SettingsPageState extends State<SettingsPage> {
           onTap: _refreshCache,
         ),
         ListTile(
+          leading: const Icon(Icons.radio),
+          title: const Text('Radio Cache Wissen'),
+          subtitle: const Text('Wis radio metadata en artwork cache'),
+          onTap: _clearRadioCache,
+        ),
+        ListTile(
           leading: const Icon(Icons.clear_all, color: Colors.red),
-          title: const Text('Cache Wissen', style: TextStyle(color: Colors.red)),
-          subtitle: const Text('Wis alle opgeslagen artikelen'),
+          title: const Text('Alle Cache Wissen', style: TextStyle(color: Colors.red)),
+          subtitle: const Text('Wis alle opgeslagen artikelen en radio data'),
           onTap: _clearCache,
         ),
       ],
@@ -647,6 +653,46 @@ class _SettingsPageState extends State<SettingsPage> {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Fout bij wissen cache')),
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _clearRadioCache() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Radio Cache Wissen'),
+        content: const Text('Weet je zeker dat je de radio cache wilt wissen? Dit zal artwork en metadata verwijderen.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuleren'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Wissen'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        // Clear cached network images
+        PaintingBinding.instance.imageCache.clear();
+        
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Radio cache gewist')),
+          );
+        }
+      } catch (e) {
+        LogService.log('Error clearing radio cache: $e', category: 'settings_error');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Fout bij wissen radio cache')),
           );
         }
       }

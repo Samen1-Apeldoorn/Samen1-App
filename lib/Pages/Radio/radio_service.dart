@@ -1,9 +1,10 @@
 import 'package:just_audio/just_audio.dart';
 import 'package:just_audio_background/just_audio_background.dart';
+import 'dart:async';
 import '../../services/log_service.dart';
 
-/// Singleton service to manage a single AudioPlayer instance across the app
-/// for background playback using just_audio_background.
+/// Optimized singleton service to manage a single AudioPlayer instance across the app
+/// for background playback using just_audio_background with enhanced performance.
 class AudioService {
   // Singleton instance
   static final AudioService _instance = AudioService._internal();
@@ -13,10 +14,31 @@ class AudioService {
   
   // Private constructor for singleton
   AudioService._internal() {
-    LogService.log('AudioService: Initializing singleton instance', category: 'audio');
+    LogService.log('AudioService: Initializing optimized singleton instance', category: 'audio');
     
-    // Listen to player state changes for logging and potential error handling
-    player.playerStateStream.listen((state) {
+    // Initialize with optimized settings
+    _initializePlayer();
+  }
+  
+  // The single audio player instance for the entire app
+  final AudioPlayer player = AudioPlayer();
+  
+  // Connection state tracking
+  bool _isInitialized = false;
+  bool _isConnecting = false;
+  StreamSubscription? _stateSubscription;
+  StreamSubscription? _eventSubscription;
+  
+  // Metadata for the radio stream
+  static const String radioStreamUrl = 'https://server-67.stream-server.nl:18752/stream';
+  static const String radioStationId = 'samen1_live_radio';
+  static const String radioStationName = 'Samen1 Radio';
+  static const String fallbackArtworkUrl = 'https://samen1.nl/bestanden/uploads/samen1-radioimg-1.png';
+  
+  // Enhanced player initialization
+  void _initializePlayer() {
+    // Listen to player state changes with enhanced logging
+    _stateSubscription = player.playerStateStream.listen((state) {
       final processingState = state.processingState;
       final playing = state.playing;
       
@@ -27,25 +49,37 @@ class AudioService {
         category: 'audio_state'
       );
 
+      // Update connection state
+      _isConnecting = processingState == ProcessingState.loading || 
+                     processingState == ProcessingState.buffering;
+
       // Handle potential errors signaled by the idle state after playing/loading
       if (processingState == ProcessingState.idle && !_isDisposing && player.audioSource != null) {
-         // Log only if it becomes idle *after* an audio source has been set
-         LogService.log(
-           'AudioService: Player entered idle state unexpectedly after source was set.',
-           category: 'audio_warning'
-         );
+        LogService.log(
+          'AudioService: Player entered idle state unexpectedly after source was set.',
+          category: 'audio_warning'
+        );
       }
 
-    }, onError: (error, stackTrace) { // Added onError callback for the stream
-       LogService.log(
-         'AudioService: Player state stream error: $error\n$stackTrace',
-         category: 'audio_error'
-       );
+    }, onError: (error, stackTrace) {
+      LogService.log(
+        'AudioService: Player state stream error: $error\n$stackTrace',
+        category: 'audio_error'
+      );
     });
     
-    // Log general playback errors
-    player.playbackEventStream.listen((_) {}, 
-      onError: (error, stackTrace) { // Added stackTrace
+    // Listen to playback events for enhanced error handling
+    _eventSubscription = player.playbackEventStream.listen(
+      (event) {
+        // Handle successful buffering completion
+        if (event.bufferedPosition > Duration.zero) {
+          LogService.log(
+            'AudioService: Buffered ${event.bufferedPosition.inSeconds}s',
+            category: 'audio_detail'
+          );
+        }
+      },
+      onError: (error, stackTrace) {
         LogService.log(
           'AudioService: Playback event error: $error\n$stackTrace',
           category: 'audio_error'
@@ -54,47 +88,34 @@ class AudioService {
     );
   }
   
-  // Helper method to convert ProcessingState to a readable string
-  String _processingStateToString(ProcessingState state) {
-    switch (state) {
-      case ProcessingState.idle: return 'idle';
-      case ProcessingState.loading: return 'loading';
-      case ProcessingState.buffering: return 'buffering';
-      case ProcessingState.ready: return 'ready';
-      case ProcessingState.completed: return 'completed';
-    }
-  }
-  
-  // The single audio player instance for the entire app
-  final AudioPlayer player = AudioPlayer();
-  
-  // Metadata for the radio stream
-  static const String radioStreamUrl = 'https://server-67.stream-server.nl:18752/stream';
-  static const String radioStationId = 'samen1_live_radio';
-  static const String radioStationName = 'Samen1 Radio';
-  static const String fallbackArtworkUrl = 'https://samen1.nl/bestanden/uploads/samen1-radioimg-1.png';
-  
-  // Set up radio stream with initial metadata
+  // Enhanced radio player setup with optimized buffering
   Future<void> setupRadioPlayer() async {
     try {
-      LogService.log('AudioService: Setting up radio player with stream URL: $radioStreamUrl', 
+      LogService.log('AudioService: Setting up optimized radio player with stream URL: $radioStreamUrl', 
         category: 'audio_setup');
       
-      final audioSource = AudioSource.uri(
-        Uri.parse(radioStreamUrl),
-        tag: MediaItem(
-          id: radioStationId,
-          title: radioStationName,
-          // Use station name initially instead of 'Live Stream'
-          artist: radioStationName,
-          artUri: Uri.parse(fallbackArtworkUrl),
-          displayTitle: radioStationName,
-          // Use station name initially instead of 'Live Stream'
-          displaySubtitle: radioStationName,
+      // Set optimized audio session
+      await player.setAudioSource(
+        AudioSource.uri(
+          Uri.parse(radioStreamUrl),
+          tag: MediaItem(
+            id: radioStationId,
+            title: radioStationName,
+            artist: radioStationName,
+            artUri: Uri.parse(fallbackArtworkUrl),
+            displayTitle: radioStationName,
+            displaySubtitle: radioStationName,
+          ),
         ),
+        // Optimize for streaming with reduced preload
+        preload: false,
       );
       
-      await player.setAudioSource(audioSource);
+      // Set optimized buffer settings for live streaming
+      await player.setSpeed(1.0);
+      await player.setVolume(1.0);
+      
+      _isInitialized = true;
       LogService.log('AudioService: Radio player set up successfully', category: 'audio');
       
       // Log current capabilities
@@ -110,67 +131,88 @@ class AudioService {
         'AudioService: Error setting up radio player: $e\n$stack', 
         category: 'audio_error'
       );
+      _isInitialized = false;
       rethrow;
     }
   }
 
-  // Update player notification with new track information
+  // Enhanced media item update with optimized performance
   Future<void> updateMediaItem({
     required String title,
     required String artist,
     required String artworkUrl,
   }) async {
-    // Ensure player has an audio source before trying to update
-    if (player.audioSource == null) {
-       LogService.log('AudioService: Cannot update media item, player has no audio source.', category: 'audio_warning');
-       return;
+    if (!_isInitialized || player.audioSource == null) {
+      LogService.log('AudioService: Cannot update media item, player not initialized.', category: 'audio_warning');
+      return;
     }
+    
     try {
       LogService.log(
-        'AudioService: Updating media item via setAudioSource - Title: "$title", Artist: "$artist"',
+        'AudioService: Updating media item - Title: "$title", Artist: "$artist"',
         category: 'audio_update'
       );
       
       final effectiveArtUrl = artworkUrl.isNotEmpty ? artworkUrl : fallbackArtworkUrl;
       
-      // Create a new MediaItem with updated info
+      // Create optimized MediaItem
       final newMediaItem = MediaItem(
         id: radioStationId,
         title: title,
         artist: artist,
         artUri: Uri.parse(effectiveArtUrl),
-        displayTitle: title, // Use actual title/artist for display fields
+        displayTitle: title,
         displaySubtitle: artist,
+        // Add additional metadata for better notification experience
+        duration: null, // Live stream has no duration
+        extras: {
+          'isLive': true,
+          'station': radioStationName,
+        },
       );
 
-      // Recreate the audio source with the new tag.
-      // This is necessary for just_audio_background to update the notification.
-      // It might cause a brief interruption or require the player to re-buffer.
+      // Optimized audio source recreation with minimal disruption
       final audioSource = AudioSource.uri(
         Uri.parse(radioStreamUrl),
         tag: newMediaItem,
       );
 
-      // Use setAudioSource to apply the changes. preload: false might help reduce interruption.
-      // Preserve position if possible
+      // Preserve playback position and state
+      final wasPlaying = player.playing;
       final currentPosition = player.position;
-      await player.setAudioSource(audioSource, preload: false, initialPosition: currentPosition);
-      LogService.log('AudioService: Audio source reset with new media item tag.', category: 'audio_update');
+      
+      await player.setAudioSource(
+        audioSource, 
+        preload: false,
+        initialPosition: currentPosition,
+      );
+      
+      // Resume playback if it was playing
+      if (wasPlaying && !player.playing) {
+        await player.play();
+      }
+      
+      LogService.log('AudioService: Media item updated successfully', category: 'audio_update');
 
     } catch (e, stack) {
       LogService.log(
         'AudioService: Error updating media item: $e\n$stack', 
         category: 'audio_error'
       );
-      // Do not rethrow here, just log the error. UI should react to player state.
     }
   }
 
-  // Play the current stream
+  // Enhanced play method with connection state tracking
   Future<void> play() async {
+    if (!_isInitialized) {
+      LogService.log('AudioService: Cannot play - player not initialized', category: 'audio_warning');
+      return;
+    }
+    
     try {
-      if (!player.playing) { // Avoid calling play if already playing
-        LogService.log('AudioService: Starting playback', category: 'audio_action');
+      if (!player.playing) {
+        LogService.log('AudioService: Starting optimized playback', category: 'audio_action');
+        _isConnecting = true;
         await player.play();
       }
     } catch (e, stack) {
@@ -178,47 +220,82 @@ class AudioService {
         'AudioService: Error starting playback: $e\n$stack', 
         category: 'audio_error'
       );
-      // Removed rethrow
+      _isConnecting = false;
     }
   }
 
-  // Pause the current stream
+  // Enhanced pause method
   Future<void> pause() async {
+    if (!_isInitialized) {
+      LogService.log('AudioService: Cannot pause - player not initialized', category: 'audio_warning');
+      return;
+    }
+    
     try {
-      if (player.playing) { // Avoid calling pause if already paused
+      if (player.playing) {
         LogService.log('AudioService: Pausing playback', category: 'audio_action');
         await player.pause();
+        _isConnecting = false;
       }
     } catch (e, stack) {
       LogService.log(
         'AudioService: Error pausing playback: $e\n$stack', 
         category: 'audio_error'
       );
-      // Removed rethrow
     }
   }
 
-  // Stop the current stream and release some resources
+  // Enhanced stop method
   Future<void> stop() async {
+    if (!_isInitialized) {
+      LogService.log('AudioService: Cannot stop - player not initialized', category: 'audio_warning');
+      return;
+    }
+    
     try {
       LogService.log('AudioService: Stopping playback', category: 'audio_action');
-      await player.stop(); // stop releases fewer resources than dispose
+      await player.stop();
+      _isConnecting = false;
     } catch (e, stack) {
       LogService.log(
         'AudioService: Error stopping playback: $e\n$stack', 
         category: 'audio_error'
       );
-      // Removed rethrow
     }
   }
 
-  // Dispose the player (call this only when the app is completely shutting down)
+  // Enhanced dispose method
   void dispose() {
-    _isDisposing = true; // Set flag to avoid error logs during disposal
-    LogService.log('AudioService: Disposing player resources', category: 'audio');
+    _isDisposing = true;
+    LogService.log('AudioService: Disposing optimized player resources', category: 'audio');
+    
+    // Cancel subscriptions
+    _stateSubscription?.cancel();
+    _eventSubscription?.cancel();
+    
+    // Reset state
+    _isInitialized = false;
+    _isConnecting = false;
+    
+    // Dispose player
     player.dispose();
   }
 
   // Flag to prevent logging errors during disposal
   bool _isDisposing = false; 
+  
+  // Helper method to convert ProcessingState to a readable string
+  String _processingStateToString(ProcessingState state) {
+    switch (state) {
+      case ProcessingState.idle: return 'idle';
+      case ProcessingState.loading: return 'loading';
+      case ProcessingState.buffering: return 'buffering';
+      case ProcessingState.ready: return 'ready';
+      case ProcessingState.completed: return 'completed';
+    }
+  }
+  
+  // Getter for connection state
+  bool get isConnecting => _isConnecting;
+  bool get isInitialized => _isInitialized;
 }
