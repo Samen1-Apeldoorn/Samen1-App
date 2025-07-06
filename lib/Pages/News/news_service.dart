@@ -40,6 +40,9 @@ class NewsArticle {
     Map<String, dynamic>? mediaDetails, // Add mediaDetails parameter
   }) : _mediaDetails = mediaDetails; // Initialize _mediaDetails
   
+  // Getter for mediaDetails
+  Map<String, dynamic>? get mediaDetails => _mediaDetails;
+  
   // Extract the image sizes from the media object
   static String _extractImageUrl(Map<String, dynamic> media) {
     final sizes = media['media_details']?['sizes'];

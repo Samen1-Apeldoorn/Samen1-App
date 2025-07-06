@@ -7,6 +7,7 @@ import '../../services/notification_service.dart';
 import '../../services/log_service.dart';
 import '../../services/discord_service.dart';
 import '../../services/version_service.dart';
+import '../../services/cache_manager.dart';
 import '../Radio/radio_service.dart';
 
 class SettingsPage extends StatefulWidget {
@@ -181,9 +182,17 @@ class _SettingsPageState extends State<SettingsPage> {
            // Add constraints if needed, e.g., network connectivity
            // constraints: Constraints(networkType: NetworkType.connected),
          );
+         
+         // Register cache maintenance task
+         await Workmanager().registerPeriodicTask(
+           'samen1-cache-maintenance',
+           'cacheMaintenance',
+           frequency: const Duration(hours: 6),
+         );
        } else {
          LogService.log('SettingsPage: Canceling background tasks', category: 'settings');
          await Workmanager().cancelByUniqueName('samen1-rss-check');
+         await Workmanager().cancelByUniqueName('samen1-cache-maintenance');
        }
 
        LogService.log('SettingsPage: Settings saved and tasks configured successfully', category: 'settings');
@@ -416,6 +425,8 @@ class _SettingsPageState extends State<SettingsPage> {
                 const Divider(),
                 if (_isRadioPlaying) _buildRadioControls(),
                 _buildBugReportTile(),
+                const Divider(),
+                _buildCacheManagementSection(),
                 const SizedBox(height: 32),
                 Center(
                   child: Text(
@@ -562,5 +573,83 @@ class _SettingsPageState extends State<SettingsPage> {
       subtitle: const Text('Stuur een probleem rapport'),
       onTap: _showBugReportDialog,
     );
+  }
+
+  Widget _buildCacheManagementSection() {
+    return ExpansionTile(
+      leading: const Icon(Icons.storage),
+      title: const Text('Cache Beheer'),
+      subtitle: const Text('Beheer opgeslagen artikelen'),
+      children: [
+        ListTile(
+          leading: const Icon(Icons.refresh),
+          title: const Text('Cache Verversen'),
+          subtitle: const Text('Ververs cache op de achtergrond'),
+          onTap: _refreshCache,
+        ),
+        ListTile(
+          leading: const Icon(Icons.clear_all, color: Colors.red),
+          title: const Text('Cache Wissen', style: TextStyle(color: Colors.red)),
+          subtitle: const Text('Wis alle opgeslagen artikelen'),
+          onTap: _clearCache,
+        ),
+      ],
+    );
+  }
+
+  Future<void> _refreshCache() async {
+    try {
+      await CacheManager.refreshCache();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cache wordt op de achtergrond ververst')),
+        );
+      }
+    } catch (e) {
+      LogService.log('Error refreshing cache: $e', category: 'settings_error');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Fout bij verversen cache')),
+        );
+      }
+    }
+  }
+
+  Future<void> _clearCache() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Cache Wissen'),
+        content: const Text('Weet je zeker dat je alle opgeslagen artikelen wilt verwijderen? Dit kan niet ongedaan gemaakt worden.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Annuleren'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Wissen'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await CacheManager.forceCleanup();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Cache succesvol gewist')),
+          );
+        }
+      } catch (e) {
+        LogService.log('Error clearing cache: $e', category: 'settings_error');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Fout bij wissen cache')),
+          );
+        }
+      }
+    }
   }
 }

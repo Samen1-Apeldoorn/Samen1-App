@@ -3,8 +3,11 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:intl/intl.dart';
 import 'news_styles.dart';
 import '../../services/log_service.dart';
+import '../../services/enhanced_news_service.dart';
+import '../../services/connectivity_service.dart';
 import 'news_service.dart';
 import '../../Popup/news_article_screen.dart';
+import 'dart:async';
 
 // Define LoadState enum
 enum LoadState { initial, loadingInitial, loadingMore, preloading, refreshing, idle, error, allLoaded }
@@ -31,23 +34,136 @@ class _NewsPageState extends State<NewsPage> {
   // Replace boolean flags with LoadState
   LoadState _loadState = LoadState.initial; 
   bool _hasMoreArticles = true;
+  bool _isOfflineMode = false;
+  bool _hasShownOfflineDialog = false;
   int _currentPage = 1; // Represents the page *to load next*
   final ScrollController _scrollController = ScrollController();
+  StreamSubscription<bool>? _connectivitySubscription;
   static const int _fullPageCount = 15;
 
   @override
   void initState() {
     super.initState();
+    _checkOfflineMode();
+    _setupConnectivityListener();
     // Load the first full page directly
     _loadNews(isInitialLoad: true); 
     _scrollController.addListener(_scrollListener);
     LogService.log('News page opened ${widget.categoryId != null ? 'for category ${widget.categoryId}' : 'for general news'}', category: 'news');
   }
 
+  // Setup connectivity listener
+  void _setupConnectivityListener() {
+    _connectivitySubscription = ConnectivityService.connectivityStream.listen((isOnline) {
+      if (!mounted) return;
+      
+      if (!isOnline && !_hasShownOfflineDialog) {
+        // Show offline dialog when going offline
+        _hasShownOfflineDialog = true;
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (mounted) {
+            ConnectivityService.showOfflineDialog(context);
+          }
+        });
+      } else if (isOnline && _hasShownOfflineDialog) {
+        // Show back online notification
+        _hasShownOfflineDialog = false;
+        ConnectivityService.showBackOnlineNotification(context);
+        // Trigger refresh when back online
+        _refreshNews();
+      }
+      
+      setState(() {
+        _isOfflineMode = !isOnline;
+      });
+    });
+  }
+
+  // Check if offline mode is needed
+  Future<void> _checkOfflineMode() async {
+    try {
+      // Check current connectivity status
+      final isOnline = ConnectivityService.isOnline;
+      if (mounted) {
+        setState(() {
+          _isOfflineMode = !isOnline;
+        });
+      }
+    } catch (e) {
+      LogService.log('Error checking offline mode: $e', category: 'news_error');
+    }
+  }
+
+  // Show offline information dialog
+  void _showOfflineInfo() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            const Icon(Icons.offline_bolt, color: Colors.orange),
+            const SizedBox(width: 8),
+            const Expanded(
+              child: Text(
+                'Offline Modus',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
+        content: const Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Je bent momenteel offline.'),
+            SizedBox(height: 12),
+            Text('📱 Wat betekent dit?'),
+            SizedBox(height: 8),
+            Text('• Je ziet nu opgeslagen artikelen'),
+            Text('• Geen nieuwe artikelen beschikbaar'),
+            Text('• Artikelen laden sneller uit cache'),
+            SizedBox(height: 12),
+            Text('🔄 Automatisch herstel'),
+            SizedBox(height: 8),
+            Text('• App controleert automatisch op verbinding'),
+            Text('• Nieuwe artikelen verschijnen zodra je online bent'),
+            Text('• Geen actie van jou vereist'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Begrijpen'),
+          ),
+          TextButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final scaffoldMessenger = ScaffoldMessenger.of(context);
+              final isOnline = await ConnectivityService.checkConnectivity();
+              if (!mounted) return;
+              if (isOnline) {
+                _refreshNews();
+              } else {
+                scaffoldMessenger.showSnackBar(
+                  const SnackBar(
+                    content: Text('Nog steeds geen internetverbinding'),
+                    backgroundColor: Colors.orange,
+                  ),
+                );
+              }
+            },
+            child: const Text('Opnieuw Proberen'),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   void dispose() {
     _scrollController.removeListener(_scrollListener);
     _scrollController.dispose();
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 
@@ -91,10 +207,10 @@ class _NewsPageState extends State<NewsPage> {
     LogService.log('Preloading news page $pageToPreload ${widget.categoryId != null ? 'for category ${widget.categoryId}' : ''}', category: 'news');
     
     try {
-      // Use correct service method based on categoryId
+      // Use enhanced service method based on categoryId
       final articles = widget.categoryId == null
-          ? await NewsService.getNews(page: pageToPreload, perPage: _fullPageCount)
-          : await NewsService.getNewsByCategory(categoryId: widget.categoryId!, page: pageToPreload, perPage: _fullPageCount);
+          ? await EnhancedNewsService.getNews(page: pageToPreload, perPage: _fullPageCount)
+          : await EnhancedNewsService.getNewsByCategory(categoryId: widget.categoryId!, page: pageToPreload, perPage: _fullPageCount);
       
       if (!mounted) return; 
 
@@ -143,12 +259,12 @@ class _NewsPageState extends State<NewsPage> {
         articles = _preloadedArticles;
         _preloadedArticles = []; 
       } else {
-        // Otherwise load from API
+        // Otherwise load from API using enhanced service
         LogService.log('Loading page $_currentPage directly from API', category: 'news');
-        // Use correct service method based on categoryId
+        // Use enhanced service method based on categoryId
         articles = widget.categoryId == null
-            ? await NewsService.getNews(page: _currentPage, perPage: _fullPageCount)
-            : await NewsService.getNewsByCategory(categoryId: widget.categoryId!, page: _currentPage, perPage: _fullPageCount);
+            ? await EnhancedNewsService.getNews(page: _currentPage, perPage: _fullPageCount)
+            : await EnhancedNewsService.getNewsByCategory(categoryId: widget.categoryId!, page: _currentPage, perPage: _fullPageCount);
       }
       
       if (!mounted) return; 
@@ -189,6 +305,31 @@ class _NewsPageState extends State<NewsPage> {
   // Smarter refresh function
   Future<void> _refreshNews() async {
      if (!mounted || _loadState == LoadState.refreshing) return; // Prevent concurrent refreshes
+     
+     // Check if we're offline
+     if (!ConnectivityService.isOnline) {
+       if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(
+           SnackBar(
+             content: const Row(
+               children: [
+                 Icon(Icons.wifi_off, color: Colors.white),
+                 SizedBox(width: 8),
+                 Expanded(child: Text('Geen internetverbinding - kan niet vernieuwen')),
+               ],
+             ),
+             backgroundColor: Colors.orange,
+             action: SnackBarAction(
+               label: 'Info',
+               textColor: Colors.white,
+               onPressed: () => _showOfflineInfo(),
+             ),
+           ),
+         );
+       }
+       return;
+     }
+     
      LogService.log('Refreshing news ${widget.categoryId != null ? 'for category ${widget.categoryId}' : ''}...', category: 'news');
      
     setState(() {
@@ -197,10 +338,10 @@ class _NewsPageState extends State<NewsPage> {
     });
 
     try {
-      // Use correct service method based on categoryId
+      // Use enhanced service method based on categoryId
       final List<NewsArticle> fetchedArticles = widget.categoryId == null
-          ? await NewsService.getNews(page: 1, perPage: _fullPageCount, forceRefresh: true)
-          : await NewsService.getNewsByCategory(categoryId: widget.categoryId!, page: 1, perPage: _fullPageCount, forceRefresh: true);
+          ? await EnhancedNewsService.getNews(page: 1, perPage: _fullPageCount, forceRefresh: true)
+          : await EnhancedNewsService.getNewsByCategory(categoryId: widget.categoryId!, page: 1, perPage: _fullPageCount, forceRefresh: true);
 
       if (!mounted) return;
 
@@ -260,9 +401,48 @@ class _NewsPageState extends State<NewsPage> {
       appBar: widget.isInContainer ? null : PreferredSize(
         preferredSize: const Size.fromHeight(40.0), // Smaller height
         child: AppBar(
-          title: Text(
-            appBarTitle, // Use dynamic title
-            style: const TextStyle(fontSize: 16.0), // Smaller text
+          title: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  appBarTitle, // Use dynamic title
+                  style: const TextStyle(fontSize: 16.0), // Smaller text
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              if (_isOfflineMode) ...[
+                const SizedBox(width: 8),
+                Tooltip(
+                  message: 'Offline modus - Opgeslagen artikelen worden getoond',
+                  child: GestureDetector(
+                    onTap: () => _showOfflineInfo(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.2),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.orange, width: 1),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.offline_bolt, size: 14, color: Colors.orange),
+                          SizedBox(width: 4),
+                          Text(
+                            'Offline',
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: Colors.orange,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
           backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Colors.white,

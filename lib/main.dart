@@ -11,6 +11,8 @@ import 'services/notification_service.dart';
 import 'services/rss_service.dart';
 import 'services/log_service.dart';
 import 'services/version_service.dart';
+import 'services/cache_manager.dart';
+import 'services/connectivity_service.dart';
 import 'Pages/Radio/radio_service.dart';
 
 // Global navigation key to use for navigation from outside of widgets
@@ -19,6 +21,14 @@ final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   LogService.log('Application starting', category: 'app_lifecycle');
+
+  // Initialize cache manager early
+  await CacheManager.initialize();
+  LogService.log('Cache manager initialized', category: 'app_lifecycle');
+
+  // Initialize connectivity service
+  ConnectivityService.initialize();
+  LogService.log('Connectivity service initialized', category: 'app_lifecycle');
 
   // Check notification permissions early
   final permissionStatus = await NotificationService.checkNotificationPermissionStatus();
@@ -60,7 +70,7 @@ void main() async {
     );
     LogService.log('Workmanager initialized', category: 'initialization');
   } catch (e) {
-    LogService.log('Error initializing Workmanager: $e', category: 'initialization_error');
+    LogService.log('Error initializing Workmanager: $e', category: 'initialization');
   }
   
   runApp(const MyApp());
@@ -116,6 +126,8 @@ void callbackDispatcher() {
     // Initialize Flutter binding and services for the background isolate
     WidgetsFlutterBinding.ensureInitialized(); 
     await NotificationService.initialize(); // Initialize notifications for this isolate
+    // Initialize cache manager for background tasks
+    await CacheManager.initialize();
     // It's generally safe to initialize LogService again if needed, 
     // assuming its initialization is idempotent or handles multiple calls.
     // await LogService.initialize(); // If needed by RSSService or NotificationService internally
@@ -127,6 +139,10 @@ void callbackDispatcher() {
       if (taskName == 'checkRSSFeed') {
         // Now NotificationService should be initialized when RSSService calls it
         await RSSService.checkForNewContent(); 
+      } else if (taskName == 'cacheMaintenance') {
+        // Perform cache maintenance
+        await CacheManager.forceCleanup();
+        LogService.log('Cache maintenance completed in background', category: 'background_task');
       }
       
       LogService.log('Background task completed successfully: $taskName', category: 'background_task');
@@ -230,5 +246,13 @@ class _MainScreenState extends State<MainScreen> {
         ],
       ),
     );
+  }
+
+  @override
+  void dispose() {
+    // Clean up services when app is disposed
+    CacheManager.dispose();
+    ConnectivityService.dispose();
+    super.dispose();
   }
 }
