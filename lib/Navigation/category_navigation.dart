@@ -2,6 +2,22 @@ import 'package:flutter/material.dart';
 import '../Pages/News/news_page.dart'; // Import NewsPage instead of CategoryNewsPage
 import '../services/log_service.dart';
 
+// Custom scroll physics to reduce horizontal swipe sensitivity
+class LessSensitivePageScrollPhysics extends ScrollPhysics {
+  const LessSensitivePageScrollPhysics({ScrollPhysics? parent}) : super(parent: parent);
+
+  @override
+  LessSensitivePageScrollPhysics applyTo(ScrollPhysics? ancestor) {
+    return LessSensitivePageScrollPhysics(parent: buildParent(ancestor));
+  }
+
+  @override
+  double get minFlingDistance => 50.0; // Increase minimum fling distance
+  
+  @override
+  double get minFlingVelocity => 100.0; // Increase minimum fling velocity
+}
+
 class CategoryInfo {
   final String name;
   final int id;
@@ -107,6 +123,10 @@ class _NewsContainerState extends State<NewsContainer> {
       body: PageView.builder(
         controller: _pageController,
         itemCount: _categories.length,
+        // Use custom physics to reduce horizontal swipe sensitivity
+        physics: const LessSensitivePageScrollPhysics(),
+        // Add allowImplicitScrolling to reduce sensitivity
+        allowImplicitScrolling: false,
         onPageChanged: (index) {
           setState(() {
             _selectedCategoryIndex = index;

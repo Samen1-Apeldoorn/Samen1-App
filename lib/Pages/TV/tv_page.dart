@@ -11,7 +11,7 @@ class TVPage extends StatefulWidget {
   State<TVPage> createState() => _TVPageState();
 }
 
-class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
+class _TVPageState extends State<TVPage> with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
   late VideoPlayerController _controller;
   
   // Status variables
@@ -26,6 +26,10 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
   // HLS stream URL
   static const String _hlsStreamUrl = 
       'https://server-67.stream-server.nl:1936/Samen1TV/Samen1TV/playlist.m3u8';
+
+  // Keep the widget alive to preserve TV stream state
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   void initState() {
@@ -217,6 +221,7 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,

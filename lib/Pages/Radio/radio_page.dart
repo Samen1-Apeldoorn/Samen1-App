@@ -15,7 +15,7 @@ class RadioPage extends StatefulWidget {
   State<RadioPage> createState() => _RadioPageState();
 }
 
-class _RadioPageState extends State<RadioPage> with TickerProviderStateMixin {
+class _RadioPageState extends State<RadioPage> with TickerProviderStateMixin, AutomaticKeepAliveClientMixin {
   // Use the singleton AudioService instead of creating a new AudioPlayer
   final AudioService _audioService = AudioService();
   
@@ -45,6 +45,10 @@ class _RadioPageState extends State<RadioPage> with TickerProviderStateMixin {
 
   static const String _radioInfoUrl = 'https://server-67.stream-server.nl:2000/json/stream/ValouweMediaStichting';
   static const String _radioStationName = 'Samen1 Radio';
+  
+  // Keep the widget alive to preserve radio state
+  @override
+  bool get wantKeepAlive => true;
   
   @override
   void initState() {
@@ -500,6 +504,7 @@ class _RadioPageState extends State<RadioPage> with TickerProviderStateMixin {
 
   @override
   Widget build(BuildContext context) {
+    super.build(context); // Required for AutomaticKeepAliveClientMixin
     return Scaffold(
       backgroundColor: Colors.grey[50],
       appBar: AppBar(

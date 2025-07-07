@@ -192,19 +192,39 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   late int _currentIndex; // Change from final to late
   
+  // Create page instances once to maintain state
+  late final List<Widget> _pages;
+  
   // Update to use NewsContainer instead of NewsPage
-  final List<({String name, Widget page, IconData icon})> _pageData = const [
-    (name: 'Nieuws', page: NewsContainer(), icon: Icons.newspaper),
-    (name: 'Radio', page: RadioPage(), icon: Icons.radio),
-    (name: 'TV', page: TVPage(), icon: Icons.tv),
-    (name: 'Instellingen', page: SettingsPage(), icon: Icons.settings),
+  final List<({String name, IconData icon})> _pageInfo = const [
+    (name: 'Nieuws', icon: Icons.newspaper),
+    (name: 'Radio', icon: Icons.radio),
+    (name: 'TV', icon: Icons.tv),
+    (name: 'Instellingen', icon: Icons.settings),
   ];
 
   @override
   void initState() {
     super.initState();
     _currentIndex = widget.initialIndex; // Use initialIndex from widget
+    
+    // Create pages once to maintain state across navigation
+    _pages = [
+      const NewsContainer(),
+      const RadioPage(),
+      const TVPage(),
+      const SettingsPage(),
+    ];
+    
     LogService.log('Main screen initialized at index: $_currentIndex', category: 'navigation');
+  }
+
+  @override
+  void dispose() {
+    // Clean up services when app is disposed
+    CacheManager.dispose();
+    ConnectivityService.dispose();
+    super.dispose();
   }
 
   // Add didUpdateWidget to handle updates to initialIndex
@@ -222,7 +242,7 @@ class _MainScreenState extends State<MainScreen> {
   void _onTabChanged(int index) {
     if (_currentIndex != index) {
       LogService.log(
-        'Navigatie van ${_pageData[_currentIndex].name} naar ${_pageData[index].name}', 
+        'Navigatie van ${_pageInfo[_currentIndex].name} naar ${_pageInfo[index].name}', 
         category: 'navigation'
       );
       setState(() => _currentIndex = index);
@@ -232,7 +252,10 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _pageData[_currentIndex].page,
+      body: IndexedStack(
+        index: _currentIndex,
+        children: _pages,
+      ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
         onTap: _onTabChanged,
@@ -241,18 +264,10 @@ class _MainScreenState extends State<MainScreen> {
         selectedItemColor: Colors.white,
         unselectedItemColor: Colors.white70,
         items: [
-          for (final data in _pageData)
-            BottomNavigationBarItem(icon: Icon(data.icon), label: data.name),
+          for (final info in _pageInfo)
+            BottomNavigationBarItem(icon: Icon(info.icon), label: info.name),
         ],
       ),
     );
-  }
-
-  @override
-  void dispose() {
-    // Clean up services when app is disposed
-    CacheManager.dispose();
-    ConnectivityService.dispose();
-    super.dispose();
   }
 }
