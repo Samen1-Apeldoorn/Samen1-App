@@ -38,7 +38,6 @@ class EnhancedNewsService {
     
     // L1 Cache: Check memory cache first
     if (!forceRefresh && _isMemoryCacheValid(cacheKey)) {
-      LogService.log('Returning from memory cache for page $page', category: 'enhanced_cache');
       return _memoryCache[cacheKey]!;
     }
 
@@ -46,18 +45,14 @@ class EnhancedNewsService {
     if (!forceRefresh) {
       final cachedArticles = await DatabaseService.getCachedArticles(cacheKey);
       if (cachedArticles != null) {
-        LogService.log('Returning from persistent cache for page $page', category: 'enhanced_cache');
-        
         // Update memory cache
         _memoryCache[cacheKey] = cachedArticles;
         _memoryCacheTimestamps[cacheKey] = DateTime.now();
-        
         return cachedArticles;
       }
     }
 
     // L3: Fetch from API
-    LogService.log('Fetching from API for page $page', category: 'enhanced_cache');
     return await _fetchFromAPI(
       url: '$_baseUrl?per_page=$perPage&page=$page&_embed=true',
       cacheKey: cacheKey,
@@ -77,7 +72,6 @@ class EnhancedNewsService {
     
     // L1 Cache: Check memory cache first
     if (!forceRefresh && _isMemoryCacheValid(cacheKey)) {
-      LogService.log('Returning from memory cache for category $categoryId, page $page', category: 'enhanced_cache');
       return _memoryCache[cacheKey]!;
     }
 
@@ -85,18 +79,14 @@ class EnhancedNewsService {
     if (!forceRefresh) {
       final cachedArticles = await DatabaseService.getCachedArticles(cacheKey);
       if (cachedArticles != null) {
-        LogService.log('Returning from persistent cache for category $categoryId, page $page', category: 'enhanced_cache');
-        
         // Update memory cache
         _memoryCache[cacheKey] = cachedArticles;
         _memoryCacheTimestamps[cacheKey] = DateTime.now();
-        
         return cachedArticles;
       }
     }
 
     // L3: Fetch from API
-    LogService.log('Fetching from API for category $categoryId, page $page', category: 'enhanced_cache');
     return await _fetchFromAPI(
       url: '$_categoryBaseUrl?per_page=$perPage&page=$page&categorie=$categoryId&_embed=true',
       cacheKey: cacheKey,
@@ -116,7 +106,7 @@ class EnhancedNewsService {
       final response = await http.get(Uri.parse(url)).timeout(
         const Duration(seconds: 30),
         onTimeout: () {
-          LogService.log('API request timeout for $url', category: 'enhanced_cache');
+          LogService.log('API request timeout', category: 'api_error');
           throw TimeoutException('Request timeout', const Duration(seconds: 30));
         },
       );
@@ -128,11 +118,9 @@ class EnhancedNewsService {
         // Cache the results
         await _cacheArticles(cacheKey, articles, categoryId, page);
         
-        LogService.log('Successfully fetched ${articles.length} articles from API', category: 'enhanced_cache');
         return articles;
       } else if (response.statusCode == 429) {
         // Rate limiting handling
-        LogService.log('Rate limited (429), retrying after delay', category: 'enhanced_cache');
         await Future.delayed(const Duration(milliseconds: 500));
         
         final retryResponse = await http.get(Uri.parse(url)).timeout(
@@ -143,43 +131,27 @@ class EnhancedNewsService {
           final articles = data.map((json) => NewsArticle.fromJson(json)).toList();
           
           await _cacheArticles(cacheKey, articles, categoryId, page);
-          LogService.log('Retry successful after rate limit', category: 'enhanced_cache');
           return articles;
         }
-      } else {
-        LogService.log('API returned status ${response.statusCode}: ${response.body}', category: 'enhanced_cache');
-      }
+      } 
       
       // If API fails, try to return stale cache
       final staleArticles = await DatabaseService.getCachedArticles(cacheKey);
       if (staleArticles != null) {
-        LogService.log('API failed (${response.statusCode}), returning stale cache with ${staleArticles.length} articles', category: 'enhanced_cache');
         return staleArticles;
       }
       
       return [];
-    } on TimeoutException catch (e) {
-      LogService.log('API timeout: $e', category: 'enhanced_cache');
-      
+    } on TimeoutException {
       // Return stale cache on timeout
       final staleArticles = await DatabaseService.getCachedArticles(cacheKey);
-      if (staleArticles != null) {
-        LogService.log('Timeout occurred, returning stale cache with ${staleArticles.length} articles', category: 'enhanced_cache');
-        return staleArticles;
-      }
-      
-      return [];
+      return staleArticles ?? [];
     } catch (e) {
-      LogService.log('API error: $e', category: 'enhanced_cache');
+      LogService.log('API error: $e', category: 'api_error');
       
       // Return stale cache on error
       final staleArticles = await DatabaseService.getCachedArticles(cacheKey);
-      if (staleArticles != null) {
-        LogService.log('Error occurred, returning stale cache with ${staleArticles.length} articles', category: 'enhanced_cache');
-        return staleArticles;
-      }
-      
-      return [];
+      return staleArticles ?? [];
     }
   }
 
@@ -206,15 +178,11 @@ class EnhancedNewsService {
       now,
       _persistentCacheDuration,
     );
-    
-    LogService.log('Cached ${articles.length} articles for $cacheKey', category: 'enhanced_cache');
   }
 
   // Background cache maintenance
   static Future<void> performMaintenance() async {
     try {
-      LogService.log('Starting cache maintenance', category: 'enhanced_cache');
-      
       // Clean expired cache entries
       await DatabaseService.cleanExpiredCache();
       
@@ -232,10 +200,8 @@ class EnhancedNewsService {
         _memoryCache.remove(key);
         _memoryCacheTimestamps.remove(key);
       }
-      
-      LogService.log('Cache maintenance completed', category: 'enhanced_cache');
     } catch (e) {
-      LogService.log('Cache maintenance error: $e', category: 'enhanced_cache');
+      LogService.log('Cache maintenance error: $e', category: 'cache_error');
     }
   }
 
@@ -245,8 +211,6 @@ class EnhancedNewsService {
     int startPage = 1,
     int endPage = 3,
   }) async {
-    LogService.log('Preloading articles for category $categoryId, pages $startPage-$endPage', category: 'enhanced_cache');
-    
     final futures = <Future<List<NewsArticle>>>[];
     
     for (int page = startPage; page <= endPage; page++) {
@@ -258,7 +222,6 @@ class EnhancedNewsService {
     }
     
     await Future.wait(futures);
-    LogService.log('Preloading completed', category: 'enhanced_cache');
   }
 
   // Get offline articles
@@ -283,15 +246,11 @@ class EnhancedNewsService {
 
   // Clear all caches
   static Future<void> clearAllCaches() async {
-    LogService.log('Clearing all caches', category: 'enhanced_cache');
-    
     // Clear memory cache
     _memoryCache.clear();
     _memoryCacheTimestamps.clear();
     
     // Clear persistent cache
     await DatabaseService.cleanExpiredCache();
-    
-    LogService.log('All caches cleared', category: 'enhanced_cache');
   }
 }

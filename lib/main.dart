@@ -2,10 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:workmanager/workmanager.dart';
 import 'package:just_audio_background/just_audio_background.dart';
-import 'package:permission_handler/permission_handler.dart'; // Import permission_handler
-import 'Navigation/category_navigation.dart'; // This now imports NewsPage indirectly
+import 'package:permission_handler/permission_handler.dart';
+import 'Navigation/category_navigation.dart';
 import 'Pages/Radio/radio_page.dart';
 import 'Pages/TV/tv_page.dart';
+import 'Pages/TV/tv_visible_notifier.dart';
 import 'Pages/Settings/settings_page.dart';
 import 'services/notification_service.dart';
 import 'services/rss_service.dart';
@@ -70,7 +71,7 @@ void main() async {
     );
     LogService.log('Workmanager initialized', category: 'initialization');
   } catch (e) {
-    LogService.log('Error initializing Workmanager: $e', category: 'initialization');
+    LogService.log('Error initializing Workmanager: $e', category: 'initialization_error');
   }
   
   runApp(const MyApp());
@@ -245,6 +246,18 @@ class _MainScreenState extends State<MainScreen> {
         'Navigatie van ${_pageInfo[_currentIndex].name} naar ${_pageInfo[index].name}', 
         category: 'navigation'
       );
+      // Update TV visibility when switching tabs
+      if (_pageInfo[2].name == 'TV') {  // Index 2 is TV tab
+        final tvVisibilityNotifier = TVVisibleNotifier();
+        final isEnteringTV = index == 2;
+        final isLeavingTV = _currentIndex == 2;
+        
+        if (isEnteringTV) {
+          tvVisibilityNotifier.value = true;
+        } else if (isLeavingTV) {
+          tvVisibilityNotifier.value = false;
+        }
+      }
       setState(() => _currentIndex = index);
     }
   }

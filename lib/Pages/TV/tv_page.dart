@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:video_player/video_player.dart';
 import 'dart:async';
 import '../../services/log_service.dart';
+import 'tv_visible_notifier.dart';
 
 class TVPage extends StatefulWidget {
   const TVPage({super.key});
@@ -11,8 +12,9 @@ class TVPage extends StatefulWidget {
   State<TVPage> createState() => _TVPageState();
 }
 
-class _TVPageState extends State<TVPage> with WidgetsBindingObserver, AutomaticKeepAliveClientMixin {
+class _TVPageState extends State<TVPage> with WidgetsBindingObserver {
   late VideoPlayerController _controller;
+  final _visibilityNotifier = TVVisibleNotifier();
   
   // Status variables
   bool _isError = false;
@@ -27,24 +29,42 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver, AutomaticK
   static const String _hlsStreamUrl = 
       'https://server-67.stream-server.nl:1936/Samen1TV/Samen1TV/playlist.m3u8';
 
-  // Keep the widget alive to preserve TV stream state
-  @override
-  bool get wantKeepAlive => true;
-
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     LogService.log('TV Page initialized', category: 'tv');
     
-    // Delay initialization slightly to improve UI responsiveness
-    Future.delayed(const Duration(milliseconds: 200), () {
-      if (mounted) _initializeVideoPlayer();
-    });
+    // Listen to visibility changes
+    _visibilityNotifier.addListener(_onVisibilityChanged);
+  }
+
+  void _onVisibilityChanged() {
+    if (_visibilityNotifier.value) {
+      LogService.log('TV tab became visible', category: 'tv');
+      if (!_controller.value.isInitialized) {
+        // Delay initialization slightly to improve UI responsiveness
+        Future.delayed(const Duration(milliseconds: 200), () {
+          if (mounted && _visibilityNotifier.value) _initializeVideoPlayer();
+        });
+      }
+    } else {
+      LogService.log('TV tab became invisible', category: 'tv');
+      if (_controller.value.isInitialized) {
+        _controller.pause();
+        if (_controller.value.isInitialized) {
+          _controller.removeListener(_onVideoStatusChanged);
+          _controller.dispose();
+        }
+        _initRetryTimer?.cancel();
+      }
+    }
   }
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (!_visibilityNotifier.value) return; // Only handle lifecycle if tab is visible
+    
     if (state == AppLifecycleState.paused) {
       _controller.pause();
       LogService.log('TV stream paused due to app lifecycle change', category: 'tv');
@@ -60,7 +80,7 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver, AutomaticK
   }
 
   Future<void> _initializeVideoPlayer() async {
-    if (!mounted) return;
+    if (!mounted || !_visibilityNotifier.value) return;
     
     setState(() {
       _isLoading = true;
@@ -91,7 +111,7 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver, AutomaticK
         },
       );
       
-      if (mounted) {
+      if (mounted && _visibilityNotifier.value) {
         setState(() {
           _isLoading = false;
           _retryCount = 0;
@@ -101,10 +121,12 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver, AutomaticK
         _controller.setLooping(true);
         await _controller.play();
         LogService.log('TV stream player initialized successfully', category: 'tv');
+      } else {
+        _disposeController();
       }
     } catch (error) {
       LogService.log('Error initializing TV stream: $error', category: 'tv_error');
-      if (mounted) {
+      if (mounted && _visibilityNotifier.value) {
         _handleInitializationError();
       }
     }
@@ -116,7 +138,7 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver, AutomaticK
       _controller.dispose();
     }
 
-    if (_retryCount < _maxRetryCount) {
+    if (_retryCount < _maxRetryCount && _visibilityNotifier.value) {
       final retryDelay = Duration(seconds: (_retryCount + 1) * 2);
       _retryCount++;
       
@@ -135,7 +157,7 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver, AutomaticK
       LogService.log('Max retry attempts reached for TV stream', category: 'tv_error');
     }
   }
-  
+
   void _onVideoStatusChanged() {
     final hasError = _controller.value.hasError;
     
@@ -199,15 +221,20 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver, AutomaticK
     }
   }
 
-  @override
-  void dispose() {
-    _initRetryTimer?.cancel();
-    WidgetsBinding.instance.removeObserver(this);
-    
+  void _disposeController() {
     if (_controller.value.isInitialized) {
       _controller.removeListener(_onVideoStatusChanged);
       _controller.dispose();
     }
+    _initRetryTimer?.cancel();
+  }
+
+  @override
+  void dispose() {
+    _initRetryTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    _visibilityNotifier.removeListener(_onVisibilityChanged);
+    _disposeController();
     
     SystemChrome.setPreferredOrientations([]);
     SystemChrome.setEnabledSystemUIMode(
@@ -221,7 +248,6 @@ class _TVPageState extends State<TVPage> with WidgetsBindingObserver, AutomaticK
 
   @override
   Widget build(BuildContext context) {
-    super.build(context); // Required for AutomaticKeepAliveClientMixin
     SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
       statusBarColor: Colors.transparent,
       statusBarIconBrightness: Brightness.dark,

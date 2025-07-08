@@ -11,13 +11,11 @@ import '../Popup/news_article_screen.dart'; // For article display
 
 class NotificationService {
   static final _notifications = FlutterLocalNotificationsPlugin();
-  static bool _isInitialized = false; // Track initialization
+  static bool _isInitialized = false;
 
   static Future<void> initialize() async {
-    if (_isInitialized) return; // Prevent multiple initializations
-    LogService.log('Initializing notifications plugin', category: 'notifications');
+    if (_isInitialized) return;
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
-    // For iOS, don't request permissions here initially.
     const iosSettings = DarwinInitializationSettings(
       requestAlertPermission: false,
       requestBadgePermission: false,
@@ -25,73 +23,55 @@ class NotificationService {
     );
     const settings = InitializationSettings(android: androidSettings, iOS: iosSettings);
 
-    // Add notification response handler
     await _notifications.initialize(
       settings,
       onDidReceiveNotificationResponse: _onNotificationTap,
       onDidReceiveBackgroundNotificationResponse: _onNotificationTap,
     );
     _isInitialized = true;
-    LogService.log('Notifications plugin initialized', category: 'notifications');
-
-    // Removed permission request from here
   }
 
-  // New method to check permission status
   static Future<PermissionStatus> checkNotificationPermissionStatus() async {
-    final status = await Permission.notification.status;
-    LogService.log('Checked notification permission status: $status', category: 'permissions');
-    return status;
+    return await Permission.notification.status;
   }
 
-  // New method to request permission
   static Future<PermissionStatus> requestNotificationPermission() async {
     final status = await Permission.notification.request();
-    LogService.log('Requested notification permission. Result: $status', category: 'permissions');
+    LogService.log('Notification permission request result: $status', category: 'permissions');
     return status;
   }
 
-  // Handler for notification taps
   static void _onNotificationTap(NotificationResponse notificationResponse) async {
-    final String? payload = notificationResponse.payload; // This is the article title
-    LogService.log('Notification tapped with payload: $payload', category: 'notifications');
+    final String? payload = notificationResponse.payload;
     
     if (payload == null || payload.isEmpty) {
-      LogService.log('Notification payload is empty, cannot find article', category: 'notifications_warning');
       _navigateToNewsPage();
       return;
     }
     
     try {
-      // Fetch recent articles from the API to find a match
-      LogService.log('Fetching recent news articles to match notification title...', category: 'notifications');
       final articles = await NewsService.getNews(page: 1, perPage: 50);
       
       if (articles.isEmpty) {
-        LogService.log('Failed to fetch articles from API', category: 'notifications_error');
         _navigateToNewsPage();
         return;
       }
       
-      // Find a matching article by title
       NewsArticle? matchedArticle;
       for (final article in articles) {
         if (article.title.toLowerCase() == payload.toLowerCase()) {
           matchedArticle = article;
-          LogService.log('Found matching article with ID: ${article.id}', category: 'notifications');
           break;
         }
       }
       
       if (matchedArticle != null) {
-        // Open the article screen
         navigatorKey.currentState?.push(
           MaterialPageRoute(
             builder: (context) => NewsArticleScreen(article: matchedArticle!),
           ),
         );
       } else {
-        LogService.log('No matching article found for title: "$payload"', category: 'notifications_warning');
         _navigateToNewsPage();
       }
     } catch (e, stack) {
@@ -100,14 +80,12 @@ class NotificationService {
     }
   }
   
-  // Helper method to navigate to news page as fallback
   static void _navigateToNewsPage() {
-    LogService.log('Navigating to main news page', category: 'notifications');
     navigatorKey.currentState?.pushAndRemoveUntil(
       MaterialPageRoute(
-        builder: (context) => const MainScreen(initialIndex: 0), // Go to news tab
+        builder: (context) => const MainScreen(initialIndex: 0),
       ),
-      (route) => false, // Remove all previous routes
+      (route) => false,
     );
   }
 
@@ -117,27 +95,22 @@ class NotificationService {
     required String payload,
     String? imageUrl,
   }) async {
-    // Ensure initialized before showing
     if (!_isInitialized) {
-      LogService.log('Notification service not initialized, cannot show notification.', category: 'notifications_error');
+      LogService.log('Notification service not initialized', category: 'notifications_error');
       return;
     }
-    // Check permission before attempting to show
+
     final status = await checkNotificationPermissionStatus();
     if (!status.isGranted) {
-      LogService.log('Notification permission not granted ($status), cannot show notification.', category: 'notifications_warning');
-      return; // Don't show if permission isn't granted
+      LogService.log('Notification permission not granted', category: 'notifications_warning');
+      return;
     }
 
-    LogService.log('Preparing notification: Title="$title", Body="$body", Payload="$payload"', category: 'notifications');
-
-    // ... rest of the existing showNotification logic ...
     AndroidNotificationDetails androidDetails;
 
-    if (imageUrl != null && imageUrl.isNotEmpty) { // Corrected: added parentheses to isNotEmpty
+    if (imageUrl != null && imageUrl.isNotEmpty) {
       try {
-        LogService.log('Downloading image from: $imageUrl', category: 'notifications');
-        final response = await http.get(Uri.parse(imageUrl)).timeout(const Duration(seconds: 10)); // Added const
+        final response = await http.get(Uri.parse(imageUrl)).timeout(const Duration(seconds: 10));
 
         if (response.statusCode == 200) {
           final bytes = response.bodyBytes;
@@ -151,7 +124,7 @@ class NotificationService {
             channelDescription: 'Nieuws updates van Samen1',
             importance: Importance.high,
             priority: Priority.high,
-            color: const Color(0xFFFA6401), // Added const
+            color: const Color(0xFFFA6401),
             styleInformation: BigPictureStyleInformation(
               FilePathAndroidBitmap(tempPath),
               hideExpandedLargeIcon: false,
@@ -160,14 +133,13 @@ class NotificationService {
               htmlFormatContentTitle: true,
               htmlFormatSummaryText: true,
             ),
-            largeIcon: FilePathAndroidBitmap(tempPath), // Use image as icon too
+            largeIcon: FilePathAndroidBitmap(tempPath),
           );
         } else {
-          LogService.log('Failed to download image: HTTP ${response.statusCode}', category: 'notifications_error');
           androidDetails = _createTextNotification(title, body);
         }
       } catch (e) {
-        LogService.log('Error processing image: $e', category: 'notifications_error');
+        LogService.log('Error processing notification image: $e', category: 'notifications_error');
         androidDetails = _createTextNotification(title, body);
       }
     } else {
@@ -176,13 +148,11 @@ class NotificationService {
 
     final notificationDetails = NotificationDetails(
       android: androidDetails,
-      iOS: const DarwinNotificationDetails(presentSound: true), // Added const
+      iOS: const DarwinNotificationDetails(presentSound: true),
     );
 
     try {
-      // Use a stable ID based on payload to prevent duplicate notifications
       final notificationId = payload.hashCode;
-
       await _notifications.show(
         notificationId,
         title,
@@ -190,7 +160,6 @@ class NotificationService {
         notificationDetails,
         payload: payload,
       );
-      LogService.log('Notification shown successfully with ID: $notificationId', category: 'notifications');
     } catch (e) {
       LogService.log('Error showing notification: $e', category: 'notifications_error');
     }
@@ -203,7 +172,7 @@ class NotificationService {
       channelDescription: 'Nieuws updates van Samen1',
       importance: Importance.high,
       priority: Priority.high,
-      color: const Color(0xFFFA6401), // Added const
+      color: const Color(0xFFFA6401),
       styleInformation: BigTextStyleInformation(
         body,
         contentTitle: title,

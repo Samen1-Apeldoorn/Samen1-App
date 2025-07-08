@@ -2,7 +2,6 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart';
 import 'dart:convert';
 import '../Pages/News/news_service.dart';
-import 'log_service.dart';
 
 class DatabaseService {
   static Database? _database;
@@ -21,7 +20,6 @@ class DatabaseService {
 
   static Future<Database> _initDatabase() async {
     String path = join(await getDatabasesPath(), _dbName);
-    LogService.log('Initializing database at: $path', category: 'database');
     
     return await openDatabase(
       path,
@@ -31,9 +29,6 @@ class DatabaseService {
   }
 
   static Future<void> _createDatabase(Database db, int version) async {
-    LogService.log('Creating database tables', category: 'database');
-    
-    // Articles table
     await db.execute('''
       CREATE TABLE $_articlesTable (
         id INTEGER PRIMARY KEY,
@@ -52,7 +47,6 @@ class DatabaseService {
       )
     ''');
 
-    // Cache metadata table
     await db.execute('''
       CREATE TABLE $_cacheMetadataTable (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -65,7 +59,6 @@ class DatabaseService {
       )
     ''');
 
-    // Create indices for better query performance
     await db.execute('CREATE INDEX idx_articles_category ON $_articlesTable(category)');
     await db.execute('CREATE INDEX idx_articles_date ON $_articlesTable(date DESC)');
     await db.execute('CREATE INDEX idx_cache_key ON $_cacheMetadataTable(cacheKey)');
@@ -101,7 +94,6 @@ class DatabaseService {
     }
 
     await batch.commit(noResult: true);
-    LogService.log('Saved ${articles.length} articles to database', category: 'database');
   }
 
   // Get articles from database
@@ -208,8 +200,6 @@ class DatabaseService {
       where: 'expiresAt < ?',
       whereArgs: [now],
     );
-    
-    LogService.log('Cleaned expired cache entries', category: 'database');
   }
 
   // Clean old articles (keep only last 1000 articles)
@@ -230,8 +220,6 @@ class DatabaseService {
           LIMIT 1000
         )
       ''');
-      
-      LogService.log('Cleaned old articles, kept latest 1000', category: 'database');
     }
   }
 
@@ -255,14 +243,14 @@ class DatabaseService {
 
   // Helper method to get category name from ID
   static String _getCategoryName(int categoryId) {
-    const categoryMap = {
-      67: '112',
-      73: 'Cultuur',
-      72: 'Evenementen',
-      71: 'Gemeente',
-      69: 'Politiek',
-      1: 'Regio',
-    };
-    return categoryMap[categoryId] ?? 'Regio';
+    switch (categoryId) {
+      case 67: return '112';
+      case 73: return 'Cultuur';
+      case 72: return 'Evenementen';
+      case 71: return 'Gemeente';
+      case 69: return 'Politiek';
+      case 1: return 'Regio';
+      default: return 'Overig';
+    }
   }
 }
