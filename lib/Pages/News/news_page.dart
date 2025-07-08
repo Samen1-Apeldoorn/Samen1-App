@@ -34,8 +34,6 @@ class _NewsPageState extends State<NewsPage> {
   // Replace boolean flags with LoadState
   LoadState _loadState = LoadState.initial; 
   bool _hasMoreArticles = true;
-  bool _isOfflineMode = false;
-  bool _hasShownOfflineDialog = false;
   int _currentPage = 1; // Represents the page *to load next*
   final ScrollController _scrollController = ScrollController();
   StreamSubscription<bool>? _connectivitySubscription;
@@ -57,107 +55,22 @@ class _NewsPageState extends State<NewsPage> {
     _connectivitySubscription = ConnectivityService.connectivityStream.listen((isOnline) {
       if (!mounted) return;
       
-      if (!isOnline && !_hasShownOfflineDialog) {
-        // Show offline dialog when going offline
-        _hasShownOfflineDialog = true;
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) {
-            ConnectivityService.showOfflineDialog(context);
-          }
-        });
-      } else if (isOnline && _hasShownOfflineDialog) {
-        // Show back online notification
-        _hasShownOfflineDialog = false;
-        ConnectivityService.showBackOnlineNotification(context);
+      if (isOnline) {
         // Trigger refresh when back online
         _refreshNews();
       }
-      
-      setState(() {
-        _isOfflineMode = !isOnline;
-      });
     });
   }
 
   // Check if offline mode is needed
   Future<void> _checkOfflineMode() async {
     try {
-      // Check current connectivity status
-      final isOnline = ConnectivityService.isOnline;
-      if (mounted) {
-        setState(() {
-          _isOfflineMode = !isOnline;
-        });
-      }
+      await ConnectivityService.checkConnectivity();
     } catch (e) {
       LogService.log('Error checking offline mode: $e', category: 'news_error');
     }
   }
 
-  // Show offline information dialog
-  void _showOfflineInfo() {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Row(
-          children: [
-            const Icon(Icons.offline_bolt, color: Colors.orange),
-            const SizedBox(width: 8),
-            const Expanded(
-              child: Text(
-                'Offline Modus',
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
-          ],
-        ),
-        content: const Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Je bent momenteel offline.'),
-            SizedBox(height: 12),
-            Text('📱 Wat betekent dit?'),
-            SizedBox(height: 8),
-            Text('• Je ziet nu opgeslagen artikelen'),
-            Text('• Geen nieuwe artikelen beschikbaar'),
-            Text('• Artikelen laden sneller uit cache'),
-            SizedBox(height: 12),
-            Text('🔄 Automatisch herstel'),
-            SizedBox(height: 8),
-            Text('• App controleert automatisch op verbinding'),
-            Text('• Nieuwe artikelen verschijnen zodra je online bent'),
-            Text('• Geen actie van jou vereist'),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Begrijpen'),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.pop(context);
-              final scaffoldMessenger = ScaffoldMessenger.of(context);
-              final isOnline = await ConnectivityService.checkConnectivity();
-              if (!mounted) return;
-              if (isOnline) {
-                _refreshNews();
-              } else {
-                scaffoldMessenger.showSnackBar(
-                  const SnackBar(
-                    content: Text('Nog steeds geen internetverbinding'),
-                    backgroundColor: Colors.orange,
-                  ),
-                );
-              }
-            },
-            child: const Text('Opnieuw Proberen'),
-          ),
-        ],
-      ),
-    );
-  }
 
   @override
   void dispose() {
@@ -308,26 +221,7 @@ class _NewsPageState extends State<NewsPage> {
      
      // Check if we're offline
      if (!ConnectivityService.isOnline) {
-       if (mounted) {
-         ScaffoldMessenger.of(context).showSnackBar(
-           SnackBar(
-             content: const Row(
-               children: [
-                 Icon(Icons.wifi_off, color: Colors.white),
-                 SizedBox(width: 8),
-                 Expanded(child: Text('Geen internetverbinding - kan niet vernieuwen')),
-               ],
-             ),
-             backgroundColor: Colors.orange,
-             action: SnackBarAction(
-               label: 'Info',
-               textColor: Colors.white,
-               onPressed: () => _showOfflineInfo(),
-             ),
-           ),
-         );
-       }
-       return;
+       return; // Silently return if offline
      }
      
      LogService.log('Refreshing news ${widget.categoryId != null ? 'for category ${widget.categoryId}' : ''}...', category: 'news');
@@ -381,72 +275,28 @@ class _NewsPageState extends State<NewsPage> {
       LogService.log('Error during news refresh: $e', category: 'news_error');
       if (mounted) {
         setState(() {
-          // Revert to idle, keep existing articles. Error state only if list was initially empty.
-          _loadState = _articles.isEmpty ? LoadState.error : LoadState.idle; 
+          _loadState = _articles.isEmpty ? LoadState.error : LoadState.idle;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Kon nieuws niet vernieuwen.'))
-        );
       }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Determine the title for the AppBar
     final appBarTitle = widget.title ?? 'Nieuws'; 
 
     return Scaffold(
-      // Use conditional AppBar based on isInContainer and provide dynamic title
       appBar: widget.isInContainer ? null : PreferredSize(
-        preferredSize: const Size.fromHeight(40.0), // Smaller height
+        preferredSize: const Size.fromHeight(40.0),
         child: AppBar(
-          title: Row(
-            children: [
-              Expanded(
-                child: Text(
-                  appBarTitle, // Use dynamic title
-                  style: const TextStyle(fontSize: 16.0), // Smaller text
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (_isOfflineMode) ...[
-                const SizedBox(width: 8),
-                Tooltip(
-                  message: 'Offline modus - Opgeslagen artikelen worden getoond',
-                  child: GestureDetector(
-                    onTap: () => _showOfflineInfo(),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: Colors.orange.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.orange, width: 1),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.offline_bolt, size: 14, color: Colors.orange),
-                          SizedBox(width: 4),
-                          Text(
-                            'Offline',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: Colors.orange,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ],
+          title: Text(
+            appBarTitle,
+            style: const TextStyle(fontSize: 16.0),
+            overflow: TextOverflow.ellipsis,
           ),
           backgroundColor: Theme.of(context).colorScheme.primary,
           foregroundColor: Colors.white,
-          centerTitle: false, // Align text to left
+          centerTitle: false,
         ),
       ),
       body: RefreshIndicator(
